@@ -51,8 +51,8 @@ infixl 4 usage as <?>
 -- | expected name, the second is an optional character for single-hyphen style:
 -- | For example, `boolean "optimize" (Just 'O')` will parse both `--optimize` and
 -- | `-O`.
-boolean :: String -> Maybe Char -> Optlicative Boolean
-boolean name mc = Optlicative \ state ->
+flag :: String -> Maybe Char -> Optlicative Boolean
+flag name mc = Optlicative \ state ->
   if findFlag name state
     then {state: removeFlag name state, val: pure true}
     else case mc of
@@ -62,8 +62,8 @@ boolean name mc = Optlicative \ state ->
       _ -> {state, val: pure false}
 
 -- | A version of `boolean` where you only want to use the single-hyphen style.
-flag :: Char -> Optlicative Boolean
-flag = boolean "" <<< Just
+boolean :: Char -> Optlicative Boolean
+boolean = flag "" <<< Just
 
 -- | Check whether a string appears as an option. The first argument is the
 -- | expected name, the second is a custom error message if the option does not

@@ -9,9 +9,9 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, lookup)
 import Data.Validation.Semigroup (invalid)
-import Node.Optlicative.Types (Error(..), ErrorMsg, OptState, Result)
+import Node.Optlicative.Types (OptError(..), ErrorMsg, OptState, Result)
 
-except :: forall a. Error -> OptState -> Result a
+except :: forall a. OptError -> OptState -> Result a
 except e state = {state, val: invalid (pure e)}
 
 removeHyphen :: Char -> OptState -> OptState
@@ -53,7 +53,7 @@ initialize = init {hyphen: Nil, dash: Nil, flags: Nil} where
     _ -> init acc ys -- this is where we'd put passthrough logic
   ddash _ acc _ = acc
 
-defaultError :: (ErrorMsg -> Error) -> String -> String -> Error
+defaultError :: (ErrorMsg -> OptError) -> String -> String -> OptError
 defaultError f name expected = case f "" of
   TypeError _ -> TypeError $
     "Option '" <> name <> "' expects an argument of type " <> expected <> "."
