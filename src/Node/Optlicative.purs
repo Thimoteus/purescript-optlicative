@@ -9,6 +9,8 @@ module Node.Optlicative
   , optional
   , withDefault
   , withDefaultM
+  , optF
+  , optForeign
   , parse
   , renderErrors
   , module Types
