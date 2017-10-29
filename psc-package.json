@@ -3,6 +3,7 @@
     "set": "master",
     "source": "https://github.com/thimoteus/package-sets.git",
     "depends": [
+        "validation",
         "node-process",
         "psci-support",
         "console",
