@@ -1,35 +1,46 @@
-module Node.Optlicative where
+module Node.Optlicative
+  ( throw
+  , usage, (<?>)
+  , boolean
+  , flag
+  , string
+  , int
+  , float
+  , parse
+  , renderErrors
+  , module Types
+  ) where
 
 import Prelude
 
 import Control.Monad.Eff (Eff)
+import Data.Array (intercalate)
 import Data.Array as Array
 import Data.Int (fromNumber)
-import Data.Maybe (Maybe(Just))
-import Data.Newtype (class Newtype, unwrap)
+import Data.List (List)
+import Data.List as List
+import Data.Maybe (Maybe(Just), maybe)
+import Data.Newtype (unwrap)
+import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
-import Node.Optlicative.Internal (Error(..), OptState, Value, Result, except, findDash, findFlag, findHyphen, initialize, removeDash, removeFlag, removeHyphen)
+import Node.Optlicative.Internal (defaultError, except, findDash, findFlag, findHyphen, initialize, removeDash, removeFlag, removeHyphen)
+import Node.Optlicative.Types (Error(..), ErrorMsg, Optlicative(..), Value)
+import Node.Optlicative.Types (Error(..), ErrorMsg, Optlicative(..), Value) as Types
 import Node.Process (PROCESS, argv)
-
-newtype Optlicative a = Optlicative (OptState -> Result a)
-
-derive instance newtypeOptlicative :: Newtype (Optlicative a) _
-
-derive instance functorOptlicative :: Functor Optlicative
-
-instance applyOptlicative :: Apply Optlicative where
-  apply (Optlicative f) (Optlicative a) = Optlicative \ s ->
-    let r1 = f s
-        a' = a r1.state
-        val = r1.val <*> a'.val
-        state = a'.state
-    in  {state, val}
-
-instance applicativeOptlicative :: Applicative Optlicative where
-  pure a = Optlicative \ state -> {state, val: pure a}
 
 throw :: forall a. Error -> Optlicative a
 throw e = Optlicative (except e)
+
+usage :: forall a. Optlicative a -> ErrorMsg -> Optlicative a
+usage (Optlicative o) msg = Optlicative \ s -> -- throw <<< Custom
+  let {state, val} = o s
+      check = not (isValid val)
+      err = Custom msg
+  in  { state
+      , val: if check then invalid (List.singleton err) <*> val else val
+      }
+
+infixl 4 usage as <?>
 
 boolean :: String -> Maybe Char -> Optlicative Boolean
 boolean name mc = Optlicative \ state ->
@@ -44,24 +55,31 @@ boolean name mc = Optlicative \ state ->
 flag :: String -> Maybe Char -> Optlicative Boolean
 flag = boolean
 
-string :: String -> Optlicative String
-string name = Optlicative \ state -> case findDash name state of
+string :: String -> Maybe ErrorMsg -> Optlicative String
+string name msg = Optlicative \ state -> case findDash name state of
   Just val -> {state: removeDash name state, val: pure val}
-  _ -> except Error state
+  _ -> except (maybe (defaultError MissingOpt name "") MissingOpt msg) state
 
-int :: String -> Optlicative Int
-int name = Optlicative \ state -> case findDash name state of
+int :: String -> Maybe ErrorMsg -> Optlicative Int
+int name msg = Optlicative \ state -> case findDash name state of
   Just n -> case fromNumber (readFloat n) of
     Just i -> {state: removeDash name state, val: pure i}
-    _ -> except Error state
-  _ -> except Error state
+    _ -> except
+      (maybe (defaultError TypeError name "int") TypeError msg)
+      state
+  _ -> except
+    (maybe (defaultError MissingOpt name "") MissingOpt msg)
+    state
 
-float :: String -> Optlicative Number
-float name = Optlicative \ state -> case findDash name state of
+float :: String -> Maybe ErrorMsg -> Optlicative Number
+float name msg = Optlicative \ state -> case findDash name state of
   Just n -> if isNaN (readFloat n)
-    then except Error state
+    then except (maybe (defaultError TypeError name "float") TypeError msg) state
     else {state: removeDash name state, val: pure (readFloat n)}
-  _ -> except Error state
+  _ -> except (maybe (defaultError MissingOpt name "") MissingOpt msg) state
+
+renderErrors :: List Error -> String
+renderErrors = intercalate "\n" <<< map show
 
 parse
   :: forall a e

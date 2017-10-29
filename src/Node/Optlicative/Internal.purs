@@ -8,21 +8,8 @@ import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, lookup)
-import Data.Validation.Semigroup (V, invalid)
-
-data Error = Error
-
-instance showError :: Show Error where
-  show Error = "Error"
-
-type Value a = V (List Error) a
-
-type OptState =
-  { hyphen :: List Char -- i.e. program -abc
-  , dash :: List (Tuple String String) -- i.e. program --method POST
-  , flags :: List String } -- i.e. program --silent
-
-type Result a = {state :: OptState, val :: Value a}
+import Data.Validation.Semigroup (invalid)
+import Node.Optlicative.Types (Error(..), ErrorMsg, OptState, Result)
 
 except :: forall a. Error -> OptState -> Result a
 except e state = {state, val: invalid (pure e)}
@@ -65,3 +52,11 @@ initialize = init {hyphen: Nil, dash: Nil, flags: Nil} where
     Just _ -> init (acc {dash = Tuple x y : acc.dash}) ys
     _ -> init acc ys -- this is where we'd put passthrough logic
   ddash _ acc _ = acc
+
+defaultError :: (ErrorMsg -> Error) -> String -> String -> Error
+defaultError f name expected = case f "" of
+  TypeError _ -> TypeError $
+    "Option '" <> name <> "' expects an argument of type " <> expected <> "."
+  MissingOpt _ -> MissingOpt $
+    "Option '" <> name <> "' is required."
+  Custom x -> Custom x
