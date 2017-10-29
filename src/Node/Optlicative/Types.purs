@@ -24,17 +24,17 @@ instance applyOptlicative :: Apply Optlicative where
 instance applicativeOptlicative :: Applicative Optlicative where
   pure a = Optlicative \ state -> {state, val: pure a}
 
-data Error
+data OptError
   = TypeError ErrorMsg
   | MissingOpt ErrorMsg
   | Custom ErrorMsg
 
-instance showError :: Show Error where
+instance showError :: Show OptError where
   show (TypeError msg) = "Type error: " <> msg
   show (MissingOpt msg) = "Missing option: " <> msg
   show (Custom msg) = msg
 
-type Value a = V (List Error) a
+type Value a = V (List OptError) a
 
 type OptState =
   { hyphen :: List Char -- i.e. program -abc
