@@ -1,0 +1,12 @@
+{
+    "name": "purescript-optlicative",
+    "set": "master",
+    "source": "https://github.com/thimoteus/package-sets.git",
+    "depends": [
+        "node-process",
+        "psci-support",
+        "console",
+        "eff",
+        "prelude"
+    ]
+}
