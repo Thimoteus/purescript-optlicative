@@ -108,7 +108,7 @@ Example:
 readTuple :: Foreign -> F (Tuple Int Int)
 
 optTuple :: Optlicative (Tuple Int Int)
-optTuple = optF readTuple "point" (Just "Points must be in the form '(x,y)')
+optTuple = optF readTuple "point" (Just "Points must be in the form '(x,y)'")
 ```
 
 Then the option `--point (3,5)` will not error if and only if
