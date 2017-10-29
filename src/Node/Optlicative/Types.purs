@@ -29,10 +29,16 @@ data OptError
   | MissingOpt ErrorMsg
   | Custom ErrorMsg
 
+renderOptError :: OptError -> String
+renderOptError = case _ of
+  TypeError msg -> "Type error: " <> msg
+  MissingOpt msg -> "Missing option: " <> msg
+  Custom msg -> msg
+
 instance showError :: Show OptError where
-  show (TypeError msg) = "Type error: " <> msg
-  show (MissingOpt msg) = "Missing option: " <> msg
-  show (Custom msg) = msg
+  show (TypeError msg) = "(TypeError " <> show msg <> ")"
+  show (MissingOpt msg) = "(MissingOpt " <> show msg <> ")"
+  show (Custom msg) = "(Custom " <> show msg <> ")"
 
 type Value a = V (List OptError) a
 

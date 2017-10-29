@@ -53,7 +53,7 @@ If we want to allow single-hyphen, single-character options we just change a few
 
 ```purescript
 parseConfig2 :: Optlicative (Config'' ())
-parseConfig2 = {color: _, output: _, humanReadable: _, metricUnits: _}
+parseConfig2 = {color: _, _, humanReadable: _, metricUnits: _, output: _}
   <$> flag "color" (Just 'c')
   <*> flag "human-readable" (Just 'H')
   <*> flag "metric-units" (Just 'm')
@@ -80,6 +80,40 @@ parseConfig3 = parseConfig2 <?> "Usage: p -cHm --output <filename>"
 
 Now if our users just call `p` without options, two errors will be generated: the string message in `parseConfig3` above, and the error message for when `--output` is missing.
 
+### Optional values
+
+What if we want to provide a default output directory, and don't want to require
+the user to always supply it? We can use `optional`, `withDefault` or `withDefaultM`:
+
+```purescript
+parseConfig4 :: Optlicative (Config'' ())
+parseConfig4 = {color: _, _, humanReadable: _, metricUnits: _, output: _}
+  <$> flag "color" (Just 'c')
+  <*> flag "human-readable" (Just 'H')
+  <*> flag "metric-units" (Just 'm')
+  <*> withDefault "./output.txt" (string "output" Nothing)
+```
+
+Note that none of these will fail.
+
+### Custom data-types
+
+If we have a way of reading values from a `String` (specifically a function `f` of
+type `Foreign -> F a`) then we can use `optF f` to read such a value. Any errors
+in the `F` monad get turned into `OptErrors` in the `Optlicative` functor.
+
+Example:
+
+```purescript
+readTuple :: Foreign -> F (Tuple Int Int)
+
+optTuple :: Optlicative (Tuple Int Int)
+optTuple = optF readTuple "point" (Just "Points must be in the form '(x,y)')
+```
+
+Then the option `--point (3,5)` will not error if and only if
+`readTuple (toForeign "(3,5)")` does not error.
+
 ### Running the parser
 
 ```
@@ -103,8 +137,8 @@ Also see the `test/` folder.
 
 ## Unsupported/future features
 
-* optional options-with-arguments (i.e. `--output` can be present with an argument or missing entirely)
-* options with more than one argument (workaround: separate multiple arguments by a space, wrap them all in a pair of double quotes)
+* options with more than one argument (workaround: separate multiple arguments by a space, wrap the group in a pair of double quotes)
+* other things I haven't thought of
 
 ## Installation
 

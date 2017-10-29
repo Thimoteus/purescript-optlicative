@@ -2,9 +2,11 @@ module Node.Optlicative.Internal where
 
 import Prelude
 
+import Data.Foreign (MultipleErrors, renderForeignError)
 import Data.Function (on)
 import Data.List (List(Nil), (:))
 import Data.List as List
+import Data.List.Types (toList)
 import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, lookup)
@@ -60,3 +62,9 @@ defaultError f name expected = case f "" of
   MissingOpt _ -> MissingOpt $
     "Option '" <> name <> "' is required."
   Custom x -> Custom x
+
+multipleErrorsToOptErrors :: MultipleErrors -> List OptError
+multipleErrorsToOptErrors errs =
+  let strerrs = map renderForeignError errs
+      strlist = toList strerrs
+  in  map Custom strlist
