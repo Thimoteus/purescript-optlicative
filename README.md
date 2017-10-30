@@ -37,7 +37,7 @@ parseConfig' = {color: _, output: _}
 Suddenly we think of several more boolean flags we want to support:
 
 ```purescript
-type Config'' r = Config' (humanReadable :: Boolean, metricUnits :: Boolean)
+type Config'' r = Config' (humanReadable :: Boolean, metricUnits :: Boolean | r)
 
 parseConfig'' :: Optlicative (Config'' ())
 parseConfig'' = {color: _, output: _, humanReadable: _, metricUnits: _}
