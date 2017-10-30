@@ -53,7 +53,7 @@ If we want to allow single-hyphen, single-character options we just change a few
 
 ```purescript
 parseConfig2 :: Optlicative (Config'' ())
-parseConfig2 = {color: _, _, humanReadable: _, metricUnits: _, output: _}
+parseConfig2 = {color: _, humanReadable: _, metricUnits: _, output: _}
   <$> flag "color" (Just 'c')
   <*> flag "human-readable" (Just 'H')
   <*> flag "metric-units" (Just 'm')
