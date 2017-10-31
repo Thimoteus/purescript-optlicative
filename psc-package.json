@@ -3,6 +3,9 @@
     "set": "master",
     "source": "https://github.com/thimoteus/package-sets.git",
     "depends": [
+        "record",
+        "typelevel-prelude",
+        "symbols",
         "validation",
         "node-process",
         "psci-support",

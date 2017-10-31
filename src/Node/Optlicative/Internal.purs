@@ -11,10 +11,13 @@ import Data.Maybe (Maybe(..))
 import Data.String as String
 import Data.Tuple (Tuple(..), fst, lookup)
 import Data.Validation.Semigroup (invalid)
-import Node.Optlicative.Types (OptError(..), ErrorMsg, OptState, Result)
+import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value)
+
+throwSingleError :: forall a. OptError -> Value a
+throwSingleError = invalid <<< List.singleton
 
 except :: forall a. OptError -> OptState -> Result a
-except e state = {state, val: invalid (pure e)}
+except e state = {state, val: throwSingleError e}
 
 removeHyphen :: Char -> OptState -> OptState
 removeHyphen c os = os {hyphen = List.delete c os.hyphen}
@@ -61,10 +64,22 @@ defaultError f name expected = case f "" of
     "Option '" <> name <> "' expects an argument of type " <> expected <> "."
   MissingOpt _ -> MissingOpt $
     "Option '" <> name <> "' is required."
-  Custom x -> Custom x
+  UnrecognizedOpt _ -> UnrecognizedOpt name
+  Custom _ -> Custom name
 
 multipleErrorsToOptErrors :: MultipleErrors -> List OptError
 multipleErrorsToOptErrors errs =
   let strerrs = map renderForeignError errs
       strlist = toList strerrs
   in  map Custom strlist
+
+unrecognizedOpts :: forall a. OptState -> Value a
+unrecognizedOpts {hyphen, dash, flags} =
+  let
+    hs = map show hyphen
+    ds = map (show <<< fst) dash
+    fs = map show flags
+    all = hs <> ds <> fs
+    errors = map UnrecognizedOpt all
+  in
+    invalid errors

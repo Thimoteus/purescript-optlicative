@@ -71,14 +71,9 @@ Our flags won't produce any error messages, since if a user doesn't supply a fla
 
 But we can also change the error message, for example by changing our `--output` parser to `string "output" (Just "I need to know where to place my output!")`
 
-We can also provide a default `usage` string using `(<?>)`:
-
-```purescript
-parseConfig3 :: Optlicative (Config'' ())
-parseConfig3 = parseConfig2 <?> "Usage: p -cHm --output <filename>"
-```
-
-Now if our users just call `p` without options, two errors will be generated: the string message in `parseConfig3` above, and the error message for when `--output` is missing.
+Error messages are accumulated via the semigroup-based `V` applicative functor,
+meaning that if the user gives input that causes multiple errors, each one can be
+shown.
 
 ### Optional values
 
@@ -117,27 +112,36 @@ Then the option `--point (3,5)` will not error if and only if
 ### Running the parser
 
 ```
-parse :: forall a e. Optlicative a -> Eff (process :: PROCESS | e) (Value a)
+parse :: forall a e r. Preferences a e r -> Optlicative a -> Eff (process :: PROCESS | e) r
 ```
 
-Here, `Value a` is a synonym for `V (List OptError) a`, so you'll need to `unV` the resulting `Value` in order to do anything interesting.
-
-For example, you can
+`Preferences a e r` is a record:
 
 ```purescript
-do
-  config <- parse parseConfig3
-  let str = unV renderErrors showConfig config
-  log str
+{ errorOnUnrecognizedOpts :: Boolean
+, onError :: List OptError -> Eff (process :: PROCESS | e) r
+, onSuccess :: a -> Eff (process :: PROCESS | e) r
+, helpMsg :: Maybe String
+}
 ```
 
-to print the config (or any errors) to console, for a suitable `showConfig :: Config'' () -> String`.
+A `defaultPreferences` is available, though you *should* change the `onSuccess`
+field yourself, as the default is to discard any value.
+
+The `errorOnUnrecognizedOpts` field indicates whether an error should be generated
+if a user passes in an option that isn't recognized by the parser. Note that,
+since flags cannot generate an error, a flag that isn't recognized won't generate
+an error either.
+
+The `helpMsg` field will print a given message in case of any error.
 
 Also see the `test/` folder.
 
 ## Unsupported/future features
 
 * options with more than one argument (workaround: separate multiple arguments by a space, wrap the group in a pair of double quotes)
+* passthrough options (as in `program --program-opt -- --passthrough-opt`)
+* commands (example: `pulp build --help`, `build` is a command while `--help` is an option)
 * other things I haven't thought of
 
 ## Installation

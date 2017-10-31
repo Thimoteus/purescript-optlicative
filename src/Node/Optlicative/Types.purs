@@ -2,10 +2,13 @@ module Node.Optlicative.Types where
 
 import Prelude
 
+import Control.Monad.Eff (Eff)
 import Data.List (List)
+import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.Tuple (Tuple)
 import Data.Validation.Semigroup (V)
+import Node.Process (PROCESS)
 
 newtype Optlicative a = Optlicative (OptState -> Result a)
 
@@ -27,17 +30,20 @@ instance applicativeOptlicative :: Applicative Optlicative where
 data OptError
   = TypeError ErrorMsg
   | MissingOpt ErrorMsg
+  | UnrecognizedOpt String
   | Custom ErrorMsg
 
 renderOptError :: OptError -> String
 renderOptError = case _ of
   TypeError msg -> "Type error: " <> msg
   MissingOpt msg -> "Missing option: " <> msg
+  UnrecognizedOpt msg -> "Unrecognized option: " <> msg
   Custom msg -> msg
 
 instance showError :: Show OptError where
   show (TypeError msg) = "(TypeError " <> show msg <> ")"
   show (MissingOpt msg) = "(MissingOpt " <> show msg <> ")"
+  show (UnrecognizedOpt msg) = "(UnrecognizedOpt " <> show msg <> ")"
   show (Custom msg) = "(Custom " <> show msg <> ")"
 
 type Value a = V (List OptError) a
@@ -50,3 +56,10 @@ type OptState =
 type Result a = {state :: OptState, val :: Value a}
 
 type ErrorMsg = String
+
+type Preferences a e r =
+  { errorOnUnrecognizedOpts :: Boolean
+  , onError :: List OptError -> Eff (process :: PROCESS | e) r
+  , onSuccess :: a -> Eff (process :: PROCESS | e) r
+  , helpMsg :: Maybe String
+  }

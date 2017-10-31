@@ -1,6 +1,6 @@
 module Node.Optlicative
   ( throw
-  , usage, (<?>)
+  -- , help, (<?>)
   , boolean
   , flag
   , string
@@ -13,12 +13,14 @@ module Node.Optlicative
   , optForeign
   , parse
   , renderErrors
+  , defaultPreferences
   , module Types
   ) where
 
 import Prelude
 
 import Control.Monad.Eff (Eff)
+import Control.Monad.Eff.Console (CONSOLE, error)
 import Control.Monad.Except (runExcept)
 import Data.Array (intercalate)
 import Data.Array as Array
@@ -30,30 +32,30 @@ import Data.List as List
 import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (unwrap)
-import Data.Validation.Semigroup (invalid, isValid)
+import Data.Validation.Semigroup (invalid, isValid, unV)
 import Global (isNaN, readFloat)
-import Node.Optlicative.Internal (defaultError, except, findDash, findFlag, findHyphen, initialize, multipleErrorsToOptErrors, removeDash, removeFlag, removeHyphen)
-import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Value, renderOptError)
-import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value) as Types
+import Node.Optlicative.Internal (defaultError, except, findDash, findFlag, findHyphen, initialize, multipleErrorsToOptErrors, removeDash, removeFlag, removeHyphen, throwSingleError, unrecognizedOpts)
+import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, renderOptError)
+import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Types
 import Node.Process (PROCESS, argv)
 
 -- | A combinator that always fails.
 throw :: forall a. OptError -> Optlicative a
 throw e = Optlicative (except e)
 
--- | A combinator for giving a custom error. For example:
--- | parsePerson = `{name: _, age: _} <$> string "name" Nothing <*> int "age" Nothing
--- | <?> "Usage: program --name <string> --age <int>"
-usage :: forall a. Optlicative a -> ErrorMsg -> Optlicative a
-usage (Optlicative o) msg = Optlicative \ s -> -- throw <<< Custom
-  let {state, val} = o s
-      check = not (isValid val)
-      err = Custom msg
-  in  { state
-      , val: if check then invalid (List.singleton err) <*> val else val
-      }
+-- -- | A combinator for giving a custom error. For example:
+-- -- | parsePerson = `{name: _, age: _} <$> string "name" Nothing <*> int "age" Nothing
+-- -- | <?> "Usage: program --name <string> --age <int>"`
+-- help :: forall a. Optlicative a -> ErrorMsg -> Optlicative a
+-- help (Optlicative o) msg = Optlicative \ s ->
+--   let {state, val} = o s
+--       check = not (isValid val)
+--       err = Custom msg
+--   in  { state
+--       , val: if check then invalid (List.singleton err) <*> val else val
+--       }
 
-infixl 4 usage as <?>
+-- infixl 4 help as <?>
 
 -- | Check whether a boolean value appears as an option. This combinator cannot
 -- | fail, as its absence is interpreted as `false`. The first argument is the
@@ -90,7 +92,7 @@ int name msg = Optlicative \ state -> case findDash name state of
     Just i -> {state: removeDash name state, val: pure i}
     _ -> except
       (maybe (defaultError TypeError name "int") TypeError msg)
-      state
+      (removeDash name state)
   _ -> except
     (maybe (defaultError MissingOpt name mempty) MissingOpt msg)
     state
@@ -100,7 +102,9 @@ int name msg = Optlicative \ state -> case findDash name state of
 float :: String -> Maybe ErrorMsg -> Optlicative Number
 float name msg = Optlicative \ state -> case findDash name state of
   Just n -> if isNaN (readFloat n)
-    then except (maybe (defaultError TypeError name "float") TypeError msg) state
+    then except
+      (maybe (defaultError TypeError name "float") TypeError msg)
+      (removeDash name state)
     else {state: removeDash name state, val: pure (readFloat n)}
   _ -> except (maybe (defaultError MissingOpt name mempty) MissingOpt msg) state
 
@@ -138,18 +142,49 @@ optF read name msg = Optlicative \ state -> case findDash name state of
     Left errs -> {state, val: invalid (multipleErrorsToOptErrors errs)}
   Nothing -> except (maybe (defaultError MissingOpt name mempty) MissingOpt msg) state
 
--- | A convenience function for nicely printing error messages. For example:
--- | `unV (log <<< renderErrors) doSomething =<< parse myOptlicativeParser`.
+-- | A convenience function for nicely printing error messages. Used in 
+-- | `defaultPreferences` to print any errors to the console.
 renderErrors :: List OptError -> String
 renderErrors = intercalate "\n" <<< map renderOptError
 
--- | Use this to run an `Optlicative`. The resulting `Value a` is a synonym for
--- | `V (List Error) a`, so you will need to use `unV` to handle any possible
--- | errors.
+-- | A `Preferences` that prints errors to the console, errors on unrecognized
+-- | (unparsed) options, and discards any results. You should change `onSuccess`
+-- | to something more interesting:
+-- | `myPrefs = defaultPreferences {onSuccess = runConfig}`
+defaultPreferences :: forall e a. Preferences a (console :: CONSOLE | e) Unit
+defaultPreferences =
+  { errorOnUnrecognizedOpts: true
+  , onError: error <<< renderErrors
+  , onSuccess: const (pure unit)
+  , helpMsg: Nothing
+  }
+
+-- | Use this to run an `Optlicative`. 
 parse
-  :: forall a e
-   . Optlicative a
-  -> Eff (process :: PROCESS | e) (Value a)
-parse o = do
+  :: forall a e r
+   . Preferences a e r
+  -> Optlicative a
+  -> Eff (process :: PROCESS | e) r
+parse prefs o = do
   args <- Array.drop 2 <$> argv
-  pure <<< _.val $ unwrap o $ initialize $ Array.toUnfoldable args
+  let
+    {state, val} = unwrap o $ initialize $ Array.toUnfoldable args
+    h = state.hyphen
+    d = state.dash
+    f = state.flags
+    check =
+      prefs.errorOnUnrecognizedOpts &&
+      not (List.null ((unit <$ h) <> (unit <$ d) <> (unit <$ f)))
+    finalVal = case prefs.helpMsg, check, isValid val of
+      Just msg, true, true ->
+        unrecognizedOpts state <*>
+        throwSingleError (Custom msg)
+      Just msg, true, _ ->
+        unrecognizedOpts state <*>
+        throwSingleError (Custom msg) <*>
+        val
+      Just msg, false, true -> val
+      Just msg, false, _ -> throwSingleError (Custom msg) <*> val
+      _, true, _ -> unrecognizedOpts state <*> val
+      _, _, _ -> val
+  unV prefs.onError prefs.onSuccess finalVal
