@@ -6,7 +6,6 @@ import Control.Monad.Eff (Eff)
 import Data.List (List)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.Tuple (Tuple)
 import Data.Validation.Semigroup (V)
 import Node.Process (PROCESS)
 
@@ -30,6 +29,7 @@ instance applicativeOptlicative :: Applicative Optlicative where
 data OptError
   = TypeError ErrorMsg
   | MissingOpt ErrorMsg
+  | MissingArg ErrorMsg
   | UnrecognizedOpt String
   | Custom ErrorMsg
 
@@ -37,21 +37,23 @@ renderOptError :: OptError -> String
 renderOptError = case _ of
   TypeError msg -> "Type error: " <> msg
   MissingOpt msg -> "Missing option: " <> msg
+  MissingArg msg -> "Missing argument: " <> msg
   UnrecognizedOpt msg -> "Unrecognized option: " <> msg
   Custom msg -> msg
 
 instance showError :: Show OptError where
   show (TypeError msg) = "(TypeError " <> show msg <> ")"
   show (MissingOpt msg) = "(MissingOpt " <> show msg <> ")"
+  show (MissingArg msg) = "(MissingArg " <> show msg <> ")"
   show (UnrecognizedOpt msg) = "(UnrecognizedOpt " <> show msg <> ")"
   show (Custom msg) = "(Custom " <> show msg <> ")"
 
 type Value a = V (List OptError) a
 
-type OptState =
-  { hyphen :: List Char -- i.e. program -abc
-  , dash :: List (Tuple String String) -- i.e. program --method POST
-  , flags :: List String } -- i.e. program --silent
+type OptState = List String
+  -- { bools :: List Char -- i.e. program -abc
+  -- , dash :: List (Tuple String String) -- i.e. program --method POST
+  -- , flags :: List String } -- i.e. program --silent
 
 type Result a = {state :: OptState, val :: Value a}
 

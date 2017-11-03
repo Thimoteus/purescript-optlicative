@@ -2,15 +2,14 @@ module Node.Optlicative.Internal where
 
 import Prelude
 
+import Data.Foldable (or)
 import Data.Foreign (MultipleErrors, renderForeignError)
-import Data.Function (on)
 import Data.List (List(Nil), (:))
 import Data.List as List
 import Data.List.Types (toList)
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(Just), maybe)
 import Data.String as String
-import Data.Tuple (Tuple(..), fst, lookup)
-import Data.Validation.Semigroup (invalid)
+import Data.Validation.Semigroup (invalid, unV)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value)
 
 throwSingleError :: forall a. OptError -> Value a
@@ -19,24 +18,56 @@ throwSingleError = invalid <<< List.singleton
 except :: forall a. OptError -> OptState -> Result a
 except e state = {state, val: throwSingleError e}
 
+ex :: forall a. String -> String -> (String -> OptError) -> Maybe String -> OptState -> Result a
+ex name exp ctor mb st = except (maybe (defaultError ctor name exp) ctor mb) st
+
+findAllIndices :: forall a. (a -> Boolean) -> List a -> List Int
+findAllIndices f xs = List.reverse zs where
+  zs = go Nil 0 xs
+  go acc i (y:ys) = if f y then go (i : acc) (i + 1) ys else go acc (i + 1) ys
+  go acc _ Nil = acc
+
+removeAtFor :: Int -> Int -> OptState -> {dash :: OptState, rest :: OptState}
+removeAtFor beg end state =
+  let
+    end' = beg + end + 1
+    beg' = beg + 1
+    dash = List.slice beg' end' state
+    rest = List.take beg state <> List.drop end' state
+  in
+    {dash, rest}
+
 removeHyphen :: Char -> OptState -> OptState
-removeHyphen c os = os {hyphen = List.delete c os.hyphen}
+removeHyphen c state =
+  state <#> \ str ->
+    if isHyphen str
+      then String.replace
+        (String.Pattern (String.singleton c))
+        (String.Replacement "")
+        str
+      else str
 
-removeDash :: String -> OptState -> OptState
-removeDash name os =
-  os {dash = List.deleteBy (eq `on` fst) (Tuple name "") os.dash}
+isHyphen :: String -> Boolean
+isHyphen s =
+  String.take 1 s == "-" &&
+  String.take 2 s /= "--" &&
+  String.length s >= 2
 
-removeFlag :: String -> OptState -> OptState
-removeFlag name os = os {flags = List.delete name os.flags}
+hyphens :: OptState -> OptState
+hyphens state = List.filter isHyphen state
 
-findHyphen :: Char -> OptState -> Boolean
-findHyphen c {hyphen} = c `List.elem` hyphen
+hasHyphen :: Char -> OptState -> Boolean
+hasHyphen c state =
+    or $ String.contains (String.Pattern $ String.singleton c) <$> hyphens state
 
-findFlag :: String -> OptState -> Boolean
-findFlag name {flags} = name `List.elem` flags
+find :: forall a. (a -> String) -> a -> OptState -> Maybe Int
+find f n = List.elemIndex (f n)
 
-findDash :: String -> OptState -> Maybe String
-findDash name {dash} = lookup name dash
+ddash :: String -> String
+ddash = append "--"
+
+hyphen :: Char -> String
+hyphen = append "-" <<< String.singleton
 
 charList :: String -> List Char
 charList = charList' Nil where
@@ -44,26 +75,14 @@ charList = charList' Nil where
     Just {head, tail} -> charList' (head : acc) tail  
     _ -> acc
 
-initialize :: List String -> OptState
-initialize = init {hyphen: Nil, dash: Nil, flags: Nil} where
-  init acc (x : xs) = case String.take 2 x of -- case String.uncons x of
-    "--" -> ddash (String.drop 2 x) acc xs
-    _ -> case String.uncons x of
-      Just {head: '-', tail} -> init (acc {hyphen = charList tail <> acc.hyphen}) xs
-      _ -> acc
-  init acc Nil = acc
-  ddash x acc (y : ys) = case String.uncons y of
-    Just {head: '-'} -> init (acc {flags = y : acc.flags}) ys
-    Just _ -> init (acc {dash = Tuple x y : acc.dash}) ys
-    _ -> init acc ys -- this is where we'd put passthrough logic
-  ddash _ acc _ = acc
-
 defaultError :: (ErrorMsg -> OptError) -> String -> String -> OptError
 defaultError f name expected = case f "" of
   TypeError _ -> TypeError $
     "Option '" <> name <> "' expects an argument of type " <> expected <> "."
   MissingOpt _ -> MissingOpt $
     "Option '" <> name <> "' is required."
+  MissingArg _ -> MissingArg $
+    "Option '" <> name <> "' expects " <> expected <> " arguments."
   UnrecognizedOpt _ -> UnrecognizedOpt name
   Custom _ -> Custom name
 
@@ -74,12 +93,11 @@ multipleErrorsToOptErrors errs =
   in  map Custom strlist
 
 unrecognizedOpts :: forall a. OptState -> Value a
-unrecognizedOpts {hyphen, dash, flags} =
-  let
-    hs = map show hyphen
-    ds = map (show <<< fst) dash
-    fs = map show flags
-    all = hs <> ds <> fs
-    errors = map UnrecognizedOpt all
-  in
-    invalid errors
+unrecognizedOpts = invalid <<< map UnrecognizedOpt <<< unrecognize Nil
+  where
+  isDdash s = String.take 2 s == "--" && String.length s >= 3
+  unrecognize acc lst
+    | (s : ss) <- lst
+    , isDdash s = unrecognize (s : acc) ss
+    | (_ : ss) <- lst = unrecognize acc ss
+    | otherwise = acc
