@@ -2,12 +2,10 @@ module Node.Optlicative.Types where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
 import Data.List (List)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.Validation.Semigroup (V)
-import Node.Process (PROCESS)
 
 newtype Optlicative a = Optlicative (OptState -> Result a)
 
@@ -17,11 +15,13 @@ derive instance functorOptlicative :: Functor Optlicative
 
 instance applyOptlicative :: Apply Optlicative where
   apply (Optlicative f) (Optlicative a) = Optlicative \ s ->
-    let r1 = f s
-        a' = a r1.state
-        val = r1.val <*> a'.val
-        state = a'.state
-    in  {state, val}
+    let
+      r1 = f s
+      a' = a r1.state
+      val = r1.val <*> a'.val
+      state = a'.state
+    in
+      {state, val}
 
 instance applicativeOptlicative :: Applicative Optlicative where
   pure a = Optlicative \ state -> {state, val: pure a}
@@ -31,6 +31,7 @@ data OptError
   | MissingOpt ErrorMsg
   | MissingArg ErrorMsg
   | UnrecognizedOpt String
+  | UnrecognizedCommand String
   | Custom ErrorMsg
 
 renderOptError :: OptError -> String
@@ -39,6 +40,7 @@ renderOptError = case _ of
   MissingOpt msg -> "Missing option: " <> msg
   MissingArg msg -> "Missing argument: " <> msg
   UnrecognizedOpt msg -> "Unrecognized option: " <> msg
+  UnrecognizedCommand msg -> "Unrecognized command: " <> msg
   Custom msg -> msg
 
 instance showError :: Show OptError where
@@ -46,22 +48,18 @@ instance showError :: Show OptError where
   show (MissingOpt msg) = "(MissingOpt " <> show msg <> ")"
   show (MissingArg msg) = "(MissingArg " <> show msg <> ")"
   show (UnrecognizedOpt msg) = "(UnrecognizedOpt " <> show msg <> ")"
+  show (UnrecognizedCommand msg) = "(UnrecognizedCommand " <> show msg <> ")"
   show (Custom msg) = "(Custom " <> show msg <> ")"
 
 type Value a = V (List OptError) a
 
-type OptState = List String
-  -- { bools :: List Char -- i.e. program -abc
-  -- , dash :: List (Tuple String String) -- i.e. program --method POST
-  -- , flags :: List String } -- i.e. program --silent
+type OptState = {unparsed :: List String}
 
 type Result a = {state :: OptState, val :: Value a}
 
 type ErrorMsg = String
 
-type Preferences a e r =
+type Preferences =
   { errorOnUnrecognizedOpts :: Boolean
-  , onError :: List OptError -> Eff (process :: PROCESS | e) r
-  , onSuccess :: a -> Eff (process :: PROCESS | e) r
-  , helpMsg :: Maybe String
+  , usage :: Maybe String
   }

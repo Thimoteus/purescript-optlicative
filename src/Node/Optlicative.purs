@@ -10,8 +10,9 @@ module Node.Optlicative
   , optF
   , optForeign
   , parse
-  , renderErrors
   , defaultPreferences
+  , renderErrors
+  , logErrors
   , module Types
   ) where
 
@@ -27,13 +28,14 @@ import Data.Foreign (F, Foreign, toForeign)
 import Data.Int (fromNumber)
 import Data.List (List)
 import Data.List as List
-import Data.Maybe (Maybe(..))
+import Data.Maybe (Maybe(..), fromMaybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (unwrap)
-import Data.Validation.Semigroup (invalid, unV, isValid)
+import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
-import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
-import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, renderOptError)
+import Node.Commando (class Commando, commando)
+import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, isHelp, multipleErrorsToOptErrors, partitionArgsList, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
+import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, Value, renderOptError)
 import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Types
 import Node.Process (PROCESS, argv)
 
@@ -50,7 +52,7 @@ flag :: String -> Maybe Char -> Optlicative Boolean
 flag name mc = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 0 state
+      {removed, rest} = removeAtFor i 0 state
     in
       {state: rest, val: pure true}
   _ -> case mc of
@@ -67,9 +69,9 @@ string :: String -> Maybe ErrorMsg -> Optlicative String
 string name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtFor i 1 state
     in
-      case List.head dash of
+      case List.head removed.unparsed of
         Just h -> {state: rest, val: pure h}
         _ -> ex name (show 1) MissingArg msg rest
   _ -> ex name mempty MissingOpt msg state
@@ -80,9 +82,9 @@ int :: String -> Maybe ErrorMsg -> Optlicative Int
 int name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtFor i 1 state
     in
-      case List.head dash of
+      case List.head removed.unparsed of
         Just h -> case fromNumber (readFloat h) of
           Just n -> {state: rest, val: pure n}
           _ -> ex name "int" TypeError msg rest
@@ -95,9 +97,9 @@ float :: String -> Maybe ErrorMsg -> Optlicative Number
 float name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtFor i 1 state
     in
-      case List.head dash of
+      case List.head removed.unparsed of
         Just h ->
           if isNaN (readFloat h)
             then ex name "float" TypeError msg rest
@@ -129,9 +131,9 @@ optForeign :: String -> Maybe ErrorMsg -> Optlicative Foreign
 optForeign name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtFor i 1 state
     in
-      case List.head dash of
+      case List.head removed.unparsed of
         Just h -> {state: rest, val: pure (toForeign h)}
         _ -> ex name (show 1) MissingArg msg rest
   _ -> ex name mempty MissingOpt msg state
@@ -142,9 +144,9 @@ optF :: forall a. (Foreign -> F a) -> String -> Maybe ErrorMsg -> Optlicative a
 optF read name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {dash, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtFor i 1 state
     in
-      case List.head dash of
+      case List.head removed.unparsed of
         Just h -> case runExcept (read (toForeign h)) of
           Right v -> {state: rest, val: pure v}
           Left errs -> {state: rest, val: invalid (multipleErrorsToOptErrors errs)}
@@ -156,39 +158,53 @@ optF read name msg = Optlicative \ state -> case find ddash name state of
 renderErrors :: List OptError -> String
 renderErrors = intercalate "\n" <<< map renderOptError
 
+logErrors :: forall e. List OptError -> Eff (console :: CONSOLE | e) Unit
+logErrors = error <<< renderErrors
+
 -- | A `Preferences` that prints errors to the console, errors on unrecognized
 -- | (unparsed) options, and discards any results. You should change `onSuccess`
 -- | to something more interesting:
 -- | `myPrefs = defaultPreferences {onSuccess = runConfig}`
-defaultPreferences :: forall e a. Preferences a (console :: CONSOLE | e) Unit
+defaultPreferences :: Preferences
 defaultPreferences =
   { errorOnUnrecognizedOpts: true
-  , onError: error <<< renderErrors
-  , onSuccess: const (pure unit)
-  , helpMsg: Nothing
+  , usage: Nothing
   }
 
 -- | Use this to run an `Optlicative`. 
 parse
-  :: forall a e r
-   . Preferences a e r
+  :: forall proxy helprow a e
+   . Commando helprow
+  => proxy helprow
+  -> Preferences
   -> Optlicative a
-  -> Eff (process :: PROCESS | e) r
-parse prefs o = do
+  -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
+parse rproxy prefs o = do
   args <- Array.drop 2 <$> argv
   let
-    {state, val} = unwrap o $ Array.toUnfoldable args
-    check = prefs.errorOnUnrecognizedOpts && not (List.null state)
-    finalVal = case prefs.helpMsg, check, isValid val of
-      Just msg, true, true ->
+    argslist = List.fromFoldable args
+    {cmds, opts} = partitionArgsList argslist
+    -- Commands
+    cmdhelp = commando rproxy cmds
+    cmd = List.last cmds
+    -- Opts
+    {state, val} = unwrap o {unparsed: opts}
+    unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null state.unparsed)
+    value = case isHelp opts, cmd, prefs.usage, unrecCheck, isValid val of
+      true, Nothing, Just msg, _, _ -> throwSingleError (Custom msg) -- "program --help"
+      true, Just _, _, _, _ -> -- program command --help
+        throwSingleError $
+        Custom $
+        fromMaybe "No help provided for this command." cmdhelp
+      _, _, Just msg, true, true ->
         unrecognizedOpts state <*>
         throwSingleError (Custom msg)
-      Just msg, true, _ ->
+      _, _, Just msg, true, _ ->
         unrecognizedOpts state <*>
         throwSingleError (Custom msg) <*>
         val
-      Just msg, false, true -> val
-      Just msg, false, _ -> throwSingleError (Custom msg) <*> val
-      _, true, _ -> unrecognizedOpts state <*> val
-      _, _, _ -> val
-  unV prefs.onError prefs.onSuccess finalVal
+      _, _, Just msg, false, true -> val
+      _, _, Just msg, false, _ -> throwSingleError (Custom msg) <*> val
+      _, _, _, true, _ -> unrecognizedOpts state <*> val
+      _, _, _, _, _ -> val
+  pure {cmd, value}

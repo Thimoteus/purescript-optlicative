@@ -7,9 +7,9 @@ import Data.Foreign (MultipleErrors, renderForeignError)
 import Data.List (List(Nil), (:))
 import Data.List as List
 import Data.List.Types (toList)
-import Data.Maybe (Maybe(Just), maybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.String as String
-import Data.Validation.Semigroup (invalid, unV)
+import Data.Validation.Semigroup (invalid)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value)
 
 throwSingleError :: forall a. OptError -> Value a
@@ -27,25 +27,29 @@ findAllIndices f xs = List.reverse zs where
   go acc i (y:ys) = if f y then go (i : acc) (i + 1) ys else go acc (i + 1) ys
   go acc _ Nil = acc
 
-removeAtFor :: Int -> Int -> OptState -> {dash :: OptState, rest :: OptState}
-removeAtFor beg end state =
+removeAtFor :: Int -> Int -> OptState -> {removed :: OptState, rest :: OptState}
+removeAtFor beg end state@{unparsed} =
   let
     end' = beg + end + 1
     beg' = beg + 1
-    dash = List.slice beg' end' state
-    rest = List.take beg state <> List.drop end' state
+    removed = state {unparsed = List.slice beg' end' unparsed}
+    rest = state {unparsed = List.take beg unparsed <> List.drop end' unparsed}
   in
-    {dash, rest}
+    {removed, rest}
 
 removeHyphen :: Char -> OptState -> OptState
 removeHyphen c state =
-  state <#> \ str ->
-    if isHyphen str
-      then String.replace
-        (String.Pattern (String.singleton c))
-        (String.Replacement "")
-        str
-      else str
+  let
+    f lst =
+      lst <#> \ str ->
+        if isHyphen str
+          then String.replace
+            (String.Pattern (String.singleton c))
+            (String.Replacement "")
+            str
+          else str
+  in
+    state {unparsed = f state.unparsed}
 
 isHyphen :: String -> Boolean
 isHyphen s =
@@ -53,15 +57,16 @@ isHyphen s =
   String.take 2 s /= "--" &&
   String.length s >= 2
 
-hyphens :: OptState -> OptState
-hyphens state = List.filter isHyphen state
+hyphens :: List String -> List String
+hyphens = List.filter isHyphen
 
 hasHyphen :: Char -> OptState -> Boolean
-hasHyphen c state =
-    or $ String.contains (String.Pattern $ String.singleton c) <$> hyphens state
+hasHyphen c state = or $
+  String.contains (String.Pattern $ String.singleton c) <$>
+  hyphens state.unparsed
 
 find :: forall a. (a -> String) -> a -> OptState -> Maybe Int
-find f n = List.elemIndex (f n)
+find f n = List.elemIndex (f n) <<< _.unparsed
 
 ddash :: String -> String
 ddash = append "--"
@@ -84,6 +89,7 @@ defaultError f name expected = case f "" of
   MissingArg _ -> MissingArg $
     "Option '" <> name <> "' expects " <> expected <> " arguments."
   UnrecognizedOpt _ -> UnrecognizedOpt name
+  UnrecognizedCommand _ -> UnrecognizedCommand name
   Custom _ -> Custom name
 
 multipleErrorsToOptErrors :: MultipleErrors -> List OptError
@@ -93,7 +99,7 @@ multipleErrorsToOptErrors errs =
   in  map Custom strlist
 
 unrecognizedOpts :: forall a. OptState -> Value a
-unrecognizedOpts = invalid <<< map UnrecognizedOpt <<< unrecognize Nil
+unrecognizedOpts state = invalid $ map UnrecognizedOpt $ unrecognize Nil state.unparsed
   where
   isDdash s = String.take 2 s == "--" && String.length s >= 3
   unrecognize acc lst
@@ -101,3 +107,17 @@ unrecognizedOpts = invalid <<< map UnrecognizedOpt <<< unrecognize Nil
     , isDdash s = unrecognize (s : acc) ss
     | (_ : ss) <- lst = unrecognize acc ss
     | otherwise = acc
+
+partitionArgsList :: List String -> {cmds :: List String, opts :: List String}
+partitionArgsList argslist =
+  let
+    isCmd x = String.take 1 x /= "-"
+    {init, rest} = List.span isCmd argslist
+    cmds = init
+    opts = rest
+  in
+    {cmds, opts}
+
+isHelp :: List String -> Boolean
+isHelp ("--help" : _) = true
+isHelp _ = false

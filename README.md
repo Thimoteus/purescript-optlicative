@@ -1,6 +1,7 @@
 # purescript-optlicative
 
-An applicative-style CLI option parsing lib with accumulative errors.
+An applicative-style CLI option parsing lib with accumulative errors and type-driven
+command parsing.
 
 ## Usage by example
 
@@ -89,7 +90,7 @@ parseConfig4 = {color: _, _, humanReadable: _, metricUnits: _, output: _}
   <*> withDefault "./output.txt" (string "output" Nothing)
 ```
 
-Note that none of these will fail.
+Note that none of these three combinators will fail.
 
 ### Custom data-types
 
@@ -106,42 +107,87 @@ optTuple :: Optlicative (Tuple Int Int)
 optTuple = optF readTuple "point" (Just "Points must be in the form '(x,y)'")
 ```
 
-Then the option `--point (3,5)` will not error if and only if
+Then the option `--point (3,5)` will **not** error if and only if
 `readTuple (toForeign "(3,5)")` does not error.
 
 ### Running the parser
 
-```
-parse :: forall a e r. Preferences a e r -> Optlicative a -> Eff (process :: PROCESS | e) r
+```purescript
+parse :: Constraints => Preferences -> Optlicative a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
 ```
 
-`Preferences a e r` is a record:
+`Preferences` is a record:
 
 ```purescript
 { errorOnUnrecognizedOpts :: Boolean
-, onError :: List OptError -> Eff (process :: PROCESS | e) r
-, onSuccess :: a -> Eff (process :: PROCESS | e) r
-, helpMsg :: Maybe String
+, usage :: Maybe String
 }
 ```
 
-A `defaultPreferences` is available, though you *should* change the `onSuccess`
-field yourself, as the default is to discard any value.
+A `defaultPreferences` is available.
 
 The `errorOnUnrecognizedOpts` field indicates whether an error should be generated
-if a user passes in an option that isn't recognized by the parser. Note that,
-since flags cannot generate an error, a flag that isn't recognized won't generate
-an error either.
+if a user passes in an option that isn't recognized by the parser.
 
-The `helpMsg` field will print a given message in case of any error.
+The `usage` field will print a given message in case of any error.
 
-Also see the `test/` folder.
+The `value` field has type `Value a`, which is a type synonym for
+`V (List OptError) a`. This means you'll need to use `unV` from
+`Data.Validation.Semigroup`, handling any possible errors, in order to have access
+to the value of type `a`.
+
+## Dealing with Commands
+
+Let's take a closer look at the "Constraints" part of the `parse` type signature.
+The actual signature starts like this:
+
+```purescript
+parse :: forall proxy helprow a e. Commando helprow => proxy helprow -> Preferences -> ...
+```
+
+The important part is the `Commando` typeclass constraint. It applies only to
+a certain class of rows -- similar to homogenous rows, but generalized. Let's
+look at an example:
+
+```
+type MyHelpRow =
+  ( command :: Help "help for command"
+    ( more :: Help "help for second-level command" () )
+  , second :: Help "help for second first-level command" ()
+  )
+```
+
+Note that `Help` is a type-level construct (it is an uninhabited type, so it has
+no runtime representation) that takes a type-level string (a `Symbol`) as its first
+argument and another row as its second argument.
+
+`MyHelpRow` is what I like to call a Santa row, because it's a higher-order
+homogenous record -- a ho-ho-mogenous record. It not only has breadth but also
+depth.
+
+A path through the nested levels of `MyHelpRow` represents a possible command
+the user entered. For example, if they had run `p command --help`, the parser
+would then generate the help string "help for command", while `p command more --help`
+would result in "help for second-level command".
+
+If `--help` is called after a command, and a suitable match is found for the command
+path through the help row, the help message will be placed into the `value` field
+of the result of `parse`. Any command will be placed into the `cmd` field -- if
+the program is used like `p command more`, then `cmd = Just "more"`.
+
+Note that we can replace the `more` and `second` fields with the type synonym
+`EndHelp help = Help help ()` if we're not feeling particularly lispy and wish to avoid
+unnecessary parens.
+
+## More examples
+
+See the `test/` folder.
 
 ## Unsupported/future features
 
 * options with more than one argument (workaround: separate multiple arguments by a space, wrap the group in a pair of double quotes)
 * passthrough options (as in `program --program-opt -- --passthrough-opt`)
-* commands (example: `pulp build --help`, `build` is a command while `--help` is an option)
+* options-per-command
 * other things I haven't thought of
 
 ## Installation
@@ -166,7 +212,7 @@ Also see the `test/` folder.
       "prelude"
     ],
     "repo": "https://github.com/thimoteus/purescript-optlicative.git",
-    "version": "v0.1.0"
+    "version": "v0.2.0"
   }
 ```
 
