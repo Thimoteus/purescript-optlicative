@@ -146,8 +146,8 @@ parse :: forall proxy helprow a e. Commando helprow => proxy helprow -> Preferen
 ```
 
 The important part is the `Commando` typeclass constraint. It applies only to
-a certain class of rows -- similar to homogenous rows, but generalized. Let's
-look at an example:
+a certain class of rows -- similar to homogenous rows, but a bit more generalized
+than what usually comes to mind. Let's look at an example:
 
 ```
 type MyHelpRow =
@@ -159,10 +159,7 @@ type MyHelpRow =
 
 Note that `Help` is a type-level construct (it is an uninhabited type, so it has
 no runtime representation) that takes a type-level string (a `Symbol`) as its first
-argument and another row as its second argument.
-
-`MyHelpRow` is what I like to call a Santa row, because it's a higher-order
-homogenous record -- a ho-ho-mogenous record. It not only has breadth but also
+argument and another row as its second argument. It not only has breadth but also
 depth.
 
 A path through the nested levels of `MyHelpRow` represents a possible command
