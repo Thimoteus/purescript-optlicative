@@ -44,6 +44,14 @@ type MyHelp =
   , second :: EndHelp "help for second first-level command"
   )
 
+-- | Try running the following:
+-- | 1. `pulp test -- command --help`
+-- | 2. `pulp test -- command more --help`
+-- | 3. `pulp test -- second --help`
+-- | 4. `pulp test -- --name "my name" --age 13 --height 20 --elmo`
+-- | 5. `pulp test -- --name "my name" --height 20`
+-- | 6. `pulp test -- --name "my name"`
+-- | 7. `pulp test` -- --height "my name"
 main :: forall e. Eff (process :: PROCESS, console :: CONSOLE | e) Unit
 main = do
   {cmd, value} <- parse (RProxy :: RProxy MyHelp) prefs person
