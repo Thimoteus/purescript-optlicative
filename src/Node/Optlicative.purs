@@ -13,7 +13,7 @@ module Node.Optlicative
   , defaultPreferences
   , renderErrors
   , logErrors
-  , module Types
+  , module Exports
   ) where
 
 import Prelude
@@ -33,10 +33,11 @@ import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (unwrap)
 import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
+import Node.Commando (class Commando, commando, Opt(..), endOpt) as Exports
 import Node.Commando (class Commando, commando)
 import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, partitionArgsList, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, Value, renderOptError)
-import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Types
+import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Exports
 import Node.Process (PROCESS, argv)
 
 -- | A combinator that always fails.
@@ -109,6 +110,9 @@ float name msg = Optlicative \ state -> case find ddash name state of
 
 -- | Instead of failing, turns an optlicative parser into one that always succeeds
 -- | but may do so with `Nothing` if no such option is found.
+-- | This is useful for `--help` flags in particular: Without this combinator,
+-- | it's easy to make an `Optlicative` that gives an unhelpful `MissingOpt`
+-- | error message when all the user did was try to find help text for a command.
 optional :: forall a. Optlicative a -> Optlicative (Maybe a)
 optional (Optlicative o) = Optlicative \ s ->
   let {state, val} = o s
@@ -160,7 +164,8 @@ renderErrors = intercalate "\n" <<< map renderOptError
 logErrors :: forall e. List OptError -> Eff (console :: CONSOLE | e) Unit
 logErrors = error <<< renderErrors
 
--- | A `Preferences` that errors on unrecognized options and has no usage text.
+-- | A `Preferences` that errors on unrecognized options, has no usage text,
+-- | and uses an always-failing parser for global options.
 defaultPreferences :: forall a. Preferences a
 defaultPreferences =
   { errorOnUnrecognizedOpts: true

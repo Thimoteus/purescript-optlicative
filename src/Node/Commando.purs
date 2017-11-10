@@ -1,4 +1,9 @@
-module Node.Commando where
+module Node.Commando
+  ( class RLCommando, rlCommando
+  , class Commando, commando
+  , Opt(..)
+  , endOpt
+  ) where
 
 import Prelude
 
@@ -9,29 +14,29 @@ import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Node.Optlicative.Types (Optlicative)
 import Type.Row (class RowLacks, class RowToList, Cons, Nil, RLProxy(..), kind RowList)
 
-class RLHelp
+class RLCommando
   (rl :: RowList)
   (row :: # Type)
   (a :: Type)
   | rl -> row
   where
-    rlHelp :: RLProxy rl -> Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
+    rlCommando :: RLProxy rl -> Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
-instance basisRlHelp :: RLHelp Nil () a where
-  rlHelp _ _ _ = Nothing
+instance basisRlHelp :: RLCommando Nil () a where
+  rlCommando _ _ _ = Nothing
 
 instance ihRlHelp ::
   ( IsSymbol k -- key in row of IH case
-  , RLHelp tail rowtail a -- IH
-  , RLHelp list' row' a -- also IH, for the Help 2nd arg
+  , RLCommando tail rowtail a -- IH
+  , RLCommando list' row' a -- also IH, for 2nd arg which is a row
   , RowCons k (Opt a row') rowtail row -- row = rowtail U Opt
   , RowLacks k rowtail
   , RowToList rowtail tail -- rowtail <-> tail
   , RowToList row (Cons k (Opt a row') tail) -- row <-> list
   , RowToList row' list' -- row' <-> list'
-  ) => RLHelp (Cons k (Opt a row') tail) row a where
+  ) => RLCommando (Cons k (Opt a row') tail) row a where
 
-    rlHelp _ rec args@(cmd : Nil) =
+    rlCommando _ rec args@(cmd : Nil) =
       let
         sproxy = SProxy :: SProxy k  
         opt = getopt (get sproxy rec)
@@ -39,9 +44,9 @@ instance ihRlHelp ::
       in
         if cmd == reflectSymbol sproxy
           then Just {cmd, opt}
-          else rlHelp (RLProxy :: RLProxy tail) rectail args
+          else rlCommando (RLProxy :: RLProxy tail) rectail args
 
-    rlHelp _ rec args@(x : xs) = -- haven't found final helptext yet
+    rlCommando _ rec args@(x : xs) = -- haven't found final command yet
       let
         sproxy = SProxy :: SProxy k
         rldeeper = RLProxy :: RLProxy list'
@@ -50,19 +55,19 @@ instance ihRlHelp ::
         rectail = (delete sproxy rec) :: Record rowtail
       in
         if x == reflectSymbol sproxy -- we're on the right path
-          then rlHelp rldeeper rec' xs -- recurse deeper
-          else rlHelp rlwider rectail args -- recurse wider
+          then rlCommando rldeeper rec' xs -- recurse deeper
+          else rlCommando rlwider rectail args -- recurse wider
 
-    rlHelp _ _ _ = Nothing -- ran out of command path list elements
+    rlCommando _ _ _ = Nothing -- ran out of command path elements
 
 class Commando (row :: # Type) a where
   commando :: Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
 instance rowHelpInst ::
   ( RowToList row list
-  , RLHelp list row a
+  , RLCommando list row a
   ) => Commando row a where
-    commando rec xs = rlHelp (RLProxy :: RLProxy list) rec xs
+    commando rec xs = rlCommando (RLProxy :: RLProxy list) rec xs
 
 data Opt (a :: Type) (row :: # Type) = Opt (Optlicative a) (Record row)
 

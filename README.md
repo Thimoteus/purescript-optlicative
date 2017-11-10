@@ -163,7 +163,7 @@ type MyConfig =
 ```
 
 Note that this type has not only breadth but also depth. The `Opt` type is a
-newtype around `Optlicative` but with extra type information in the second argument:
+datatype around `Optlicative` but with extra type information in the second argument:
 this is what allows us to nest commands, treating every possible command (and
 associated options) as a tree-like structure (a record), where each node (field)
 represents a pair of a command entered, and the options for that command.
