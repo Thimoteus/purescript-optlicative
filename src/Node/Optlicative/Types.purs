@@ -59,7 +59,8 @@ type Result a = {state :: OptState, val :: Value a}
 
 type ErrorMsg = String
 
-type Preferences =
+type Preferences a =
   { errorOnUnrecognizedOpts :: Boolean
   , usage :: Maybe String
+  , globalOpts :: Optlicative a
   }

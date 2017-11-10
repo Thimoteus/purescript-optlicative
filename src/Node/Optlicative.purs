@@ -28,13 +28,13 @@ import Data.Foreign (F, Foreign, toForeign)
 import Data.Int (fromNumber)
 import Data.List (List)
 import Data.List as List
-import Data.Maybe (Maybe(..), fromMaybe)
+import Data.Maybe (Maybe(..), maybe)
 import Data.Monoid (class Monoid, mempty)
 import Data.Newtype (unwrap)
 import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
 import Node.Commando (class Commando, commando)
-import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, isHelp, multipleErrorsToOptErrors, partitionArgsList, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
+import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, partitionArgsList, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, Value, renderOptError)
 import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Types
 import Node.Process (PROCESS, argv)
@@ -153,58 +153,50 @@ optF read name msg = Optlicative \ state -> case find ddash name state of
         _ -> ex name (show 1) MissingArg msg rest
   _ -> ex name mempty MissingOpt msg state
 
--- | A convenience function for nicely printing error messages. Used in 
--- | `defaultPreferences` to print any errors to the console.
+-- | A convenience function for nicely printing error messages.
 renderErrors :: List OptError -> String
 renderErrors = intercalate "\n" <<< map renderOptError
 
 logErrors :: forall e. List OptError -> Eff (console :: CONSOLE | e) Unit
 logErrors = error <<< renderErrors
 
--- | A `Preferences` that prints errors to the console, errors on unrecognized
--- | (unparsed) options, and discards any results. You should change `onSuccess`
--- | to something more interesting:
--- | `myPrefs = defaultPreferences {onSuccess = runConfig}`
-defaultPreferences :: Preferences
+-- | A `Preferences` that errors on unrecognized options and has no usage text.
+defaultPreferences :: forall a. Preferences a
 defaultPreferences =
   { errorOnUnrecognizedOpts: true
   , usage: Nothing
+  , globalOpts: throw (Custom "You should change this.")
   }
 
 -- | Use this to run an `Optlicative`. 
 parse
-  :: forall proxy helprow a e
-   . Commando helprow
-  => proxy helprow
-  -> Preferences
-  -> Optlicative a
+  :: forall optrow a e
+   . Commando optrow a
+  => Record optrow
+  -> Preferences a
   -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
-parse rproxy prefs o = do
+parse rec prefs = do
   args <- Array.drop 2 <$> argv
   let
     argslist = List.fromFoldable args
     {cmds, opts} = partitionArgsList argslist
     -- Commands
-    cmdhelp = commando rproxy cmds
+    cmdores = commando rec cmds
     cmd = List.last cmds
     -- Opts
+    o = maybe prefs.globalOpts _.opt cmdores
     {state, val} = unwrap o {unparsed: opts}
     unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null state.unparsed)
-    value = case isHelp opts, cmd, prefs.usage, unrecCheck, isValid val of
-      true, Nothing, Just msg, _, _ -> throwSingleError (Custom msg) -- "program --help"
-      true, Just _, _, _, _ -> -- program command --help
-        throwSingleError $
-        Custom $
-        fromMaybe "No help provided for this command." cmdhelp
-      _, _, Just msg, true, true ->
+    value = case prefs.usage, unrecCheck, isValid val of
+      Just msg, true, true ->
         unrecognizedOpts state <*>
         throwSingleError (Custom msg)
-      _, _, Just msg, true, _ ->
+      Just msg, true, _ ->
         unrecognizedOpts state <*>
         throwSingleError (Custom msg) <*>
         val
-      _, _, Just msg, false, true -> val
-      _, _, Just msg, false, _ -> throwSingleError (Custom msg) <*> val
-      _, _, _, true, _ -> unrecognizedOpts state <*> val
-      _, _, _, _, _ -> val
+      Just msg, false, false -> throwSingleError (Custom msg) <*> val
+      Just _, false, _ -> val
+      _, true, _ -> unrecognizedOpts state <*> val
+      _, _, _ -> val
   pure {cmd, value}

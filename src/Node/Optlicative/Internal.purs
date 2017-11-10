@@ -117,7 +117,3 @@ partitionArgsList argslist =
     opts = rest
   in
     {cmds, opts}
-
-isHelp :: List String -> Boolean
-isHelp ("--help" : _) = true
-isHelp _ = false

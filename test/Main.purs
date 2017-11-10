@@ -4,58 +4,54 @@ import Prelude
 
 import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, log)
+import Data.List (length)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Validation.Semigroup (unV)
-import Node.Commando (EndHelp, Help)
-import Node.Optlicative (Optlicative, defaultPreferences, flag, float, int, parse, string, withDefault, logErrors)
+import Node.Commando (Opt(Opt))
+import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, parse, string)
 import Node.Process (PROCESS)
-import Type.Row (RProxy(..))
+import Test.Types (Config(..), ConfigRec, showConfig)
 
-newtype Person = Person {name :: String, age :: Int, height :: Number, elmo :: Boolean}
+configRec :: Record ConfigRec
+configRec =
+  { one: Opt optOne
+    { two: Opt optTwo {}
+    }
+  }
 
-instance showPers :: Show Person where show = showPerson
+optOne :: Optlicative Config
+optOne = (\ output help -> ConfigOne {output, help})
+  <$> string "output" Nothing
+  <*> flag "help" (Just 'h')
 
-usage :: String
-usage = "Usage: --name <string> --age <int> --height <float> [--elmo]"
+optTwo :: Optlicative Config
+optTwo = (\ color help -> ConfigTwo {color, help})
+  <$> flag "color" (Just 'c')
+  <*> flag "help" (Just 'h')
 
-person :: Optlicative Person
-person
-  = (\name age height elmo -> Person {name, age, height, elmo})
-  <$> string "name" Nothing
-  <*> withDefault 0 (int "age" Nothing)
-  <*> float "height" Nothing
-  <*> flag "elmo" Nothing
+globalConfig :: Optlicative Config
+globalConfig = (\ help version -> GlobalConfig {help, version})
+  <$> flag "help" (Just 'h')
+  <*> flag "version" (Just 'v')  
 
-showPerson :: Person -> String
-showPerson (Person {name, age, height, elmo}) =
-    "{name: " <>
-    name <>
-    ", age: " <>
-    show age <>
-    ", height: " <>
-    show height <>
-    ", elmo: " <>
-    show elmo <>
-    "}"
-
-type MyHelp =
-  ( command :: Help "help for command"
-    ( more :: EndHelp "help for second-level command" )
-  , second :: EndHelp "help for second first-level command"
-  )
+myPrefs :: Preferences Config
+myPrefs = defaultPreferences {globalOpts = globalConfig}
 
 -- | Try running the following:
--- | 1. `pulp test -- command --help`
--- | 2. `pulp test -- command more --help`
--- | 3. `pulp test -- second --help`
--- | 4. `pulp test -- --name "my name" --age 13 --height 20 --elmo`
--- | 5. `pulp test -- --name "my name" --height 20`
--- | 6. `pulp test -- --name "my name"`
--- | 7. `pulp test` -- --height "my name"
+-- | 1. `pulp test -- one two --help`
+-- | 2. `pulp test -- --version`
+-- | 3. `pulp test -- one`
 main :: forall e. Eff (process :: PROCESS, console :: CONSOLE | e) Unit
 main = do
-  {cmd, value} <- parse (RProxy :: RProxy MyHelp) prefs person
-  maybe (pure unit) (\ x -> log "Command is:" *> log x) cmd
-  unV logErrors (log <<< showPerson) value
-    where
-    prefs = defaultPreferences {usage = Just usage}
+  {cmd, value} <- parse configRec myPrefs
+  maybe
+    (log "No path parsed")
+    (\ x -> log "Path parsed" *> log x)
+    cmd
+  unV
+    (\ x -> do
+      log "Errors found: "
+      log (show (length x) <> " errors")
+      logErrors x)
+    (\ x -> log "Value found: " *> log (showConfig x))
+    value

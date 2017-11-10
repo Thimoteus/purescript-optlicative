@@ -1,6 +1,6 @@
 # purescript-optlicative
 
-An applicative-style CLI option parsing lib with accumulative errors and type-driven
+An applicative-style CLI option parsing lib with accumulative errors and type-based
 command parsing.
 
 ## Usage by example
@@ -113,7 +113,7 @@ Then the option `--point (3,5)` will **not** error if and only if
 ### Running the parser
 
 ```purescript
-parse :: Constraints => Preferences -> Optlicative a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
+parse :: Constraints => Record optrow -> Preferences a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
 ```
 
 `Preferences` is a record:
@@ -121,6 +121,7 @@ parse :: Constraints => Preferences -> Optlicative a -> Eff (process :: PROCESS 
 ```purescript
 { errorOnUnrecognizedOpts :: Boolean
 , usage :: Maybe String
+, globalOpts :: Optlicative a
 }
 ```
 
@@ -130,6 +131,9 @@ The `errorOnUnrecognizedOpts` field indicates whether an error should be generat
 if a user passes in an option that isn't recognized by the parser.
 
 The `usage` field will print a given message in case of any error.
+
+`globalOpts` is for options which don't match a given command; for more on commands
+see the next section.
 
 The `value` field has type `Value a`, which is a type synonym for
 `V (List OptError) a`. This means you'll need to use `unV` from
@@ -142,7 +146,7 @@ Let's take a closer look at the "Constraints" part of the `parse` type signature
 The actual signature starts like this:
 
 ```purescript
-parse :: forall proxy helprow a e. Commando helprow => proxy helprow -> Preferences -> ...
+parse :: forall optrow a e. Commando optrow => Record optrow -> Preferences a -> ...
 ```
 
 The important part is the `Commando` typeclass constraint. It applies only to
@@ -150,31 +154,50 @@ a certain class of rows -- similar to homogenous rows, but a bit more generalize
 than what usually comes to mind. Let's look at an example:
 
 ```
-type MyHelpRow =
-  ( command :: Help "help for command"
-    ( more :: Help "help for second-level command" () )
-  , second :: Help "help for second first-level command" ()
+type MyConfig =
+  ( command :: Opt Config
+    ( more :: Opt Config ()
+    )
+  , second :: Opt Config ()
   )
 ```
 
-Note that `Help` is a type-level construct (it is an uninhabited type, so it has
-no runtime representation) that takes a type-level string (a `Symbol`) as its first
-argument and another row as its second argument. It not only has breadth but also
-depth.
+Note that this type has not only breadth but also depth. The `Opt` type is a
+newtype around `Optlicative` but with extra type information in the second argument:
+this is what allows us to nest commands, treating every possible command (and
+associated options) as a tree-like structure (a record), where each node (field)
+represents a pair of a command entered, and the options for that command.
 
-A path through the nested levels of `MyHelpRow` represents a possible command
-the user entered. For example, if they had run `p command --help`, the parser
-would then generate the help string "help for command", while `p command more --help`
-would result in "help for second-level command".
+For example, if the user had run `p command --help`, the parser would then recognize this, and match the `Optlicative Config` associated with the `command` command and
+run it against the `--help` flag. 
 
-If `--help` is called after a command, and a suitable match is found for the command
-path through the help row, the help message will be placed into the `value` field
-of the result of `parse`. Any command will be placed into the `cmd` field -- if
-the program is used like `p command more`, then `cmd = Just "more"`.
+Any command, if it exists, will be placed into the `cmd` field of the result --
+if the program is used like `p command more`, then `cmd = Just "more"`.
 
-Note that we can replace the `more` and `second` fields with the type synonym
-`EndHelp help = Help help ()` if we're not feeling particularly lispy and wish to avoid
-unnecessary parens.
+Let's look at the first argument to `parse`. In our example case, we'd need a
+value of type `Record MyConfig`. If we can construct a value for just one field,
+we can construct them all. And those values are built using `Opt`, as suggested
+by the definition of `MyConfig`:
+
+```purescript
+data Opt (a :: Type) (row :: # Type) = Opt (Optlicative a) (Record row)
+```
+
+`Opt`s are pairs of `Optlicative`s and a record, which allows us to continue
+chaining new `Optlicative`s. With this in mind, we can construct what we want:
+
+```purescript
+myConfig :: Record MyConfig
+myConfig =
+  { command: Opt commandOptlicative
+    { more: Opt moreOptlicative {}
+    }
+  , second: Opt secondOptlicative {}
+  }
+```
+
+We can also use `endOpt` to get rid of those empty records if we wish:
+`more: endOpt moreOptlicative`.
 
 ## More examples
 
@@ -184,7 +207,6 @@ See the `test/` folder.
 
 * options with more than one argument (workaround: separate multiple arguments by a space, wrap the group in a pair of double quotes)
 * passthrough options (as in `program --program-opt -- --passthrough-opt`)
-* options-per-command
 * other things I haven't thought of
 
 ## Installation
@@ -209,7 +231,7 @@ See the `test/` folder.
       "prelude"
     ],
     "repo": "https://github.com/thimoteus/purescript-optlicative.git",
-    "version": "v0.2.0"
+    "version": "v0.3.0"
   }
 ```
 
