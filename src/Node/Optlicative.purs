@@ -9,7 +9,8 @@ module Node.Optlicative
   , withDefaultM
   , optF
   , optForeign
-  , parse
+  , manyF
+  , optlicate
   , defaultPreferences
   , renderErrors
   , logErrors
@@ -22,20 +23,19 @@ import Control.Monad.Eff (Eff)
 import Control.Monad.Eff.Console (CONSOLE, error)
 import Control.Monad.Except (runExcept)
 import Data.Array (intercalate)
-import Data.Array as Array
 import Data.Either (Either(..))
 import Data.Foreign (F, Foreign, toForeign)
 import Data.Int (fromNumber)
 import Data.List (List)
 import Data.List as List
-import Data.Maybe (Maybe(..), maybe)
+import Data.Maybe (Maybe(..))
 import Data.Monoid (class Monoid, mempty)
-import Data.Newtype (unwrap)
+import Data.Traversable (traverse)
 import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
+import Node.Commando (class Commando)
 import Node.Commando (class Commando, commando, Opt(..), endOpt) as Exports
-import Node.Commando (class Commando, commando)
-import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, partitionArgsList, removeAtFor, removeHyphen, throwSingleError, unrecognizedOpts)
+import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, parse, removeAtFor, removeAtForWhile, removeHyphen, startsDash)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, Value, renderOptError)
 import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Exports
 import Node.Process (PROCESS, argv)
@@ -70,7 +70,7 @@ string :: String -> Maybe ErrorMsg -> Optlicative String
 string name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
         Just h -> {state: rest, val: pure h}
@@ -83,7 +83,7 @@ int :: String -> Maybe ErrorMsg -> Optlicative Int
 int name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
         Just h -> case fromNumber (readFloat h) of
@@ -98,7 +98,7 @@ float :: String -> Maybe ErrorMsg -> Optlicative Number
 float name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
         Just h ->
@@ -135,7 +135,7 @@ optForeign :: String -> Maybe ErrorMsg -> Optlicative Foreign
 optForeign name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
         Just h -> {state: rest, val: pure (toForeign h)}
@@ -144,17 +144,30 @@ optForeign name msg = Optlicative \ state -> case find ddash name state of
 
 -- | Given a deserializing function, returns the value if no errors were encountered
 -- | during deserialization. If there were errors, they are turned into `OptError`s.
-optF :: forall a. (Foreign -> F a) -> String -> Maybe ErrorMsg -> Optlicative a
+optF :: forall a. (String -> F a) -> String -> Maybe ErrorMsg -> Optlicative a
 optF read name msg = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 1 state
+      {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
-        Just h -> case runExcept (read (toForeign h)) of
+        Just h -> case runExcept (read h) of
           Right v -> {state: rest, val: pure v}
           Left errs -> {state: rest, val: invalid (multipleErrorsToOptErrors errs)}
         _ -> ex name (show 1) MissingArg msg rest
+  _ -> ex name mempty MissingOpt msg state
+
+-- | Given a deserializing function and the number of args to parse, none of which
+-- | may start with a '-' character, returns a list of parsed values.
+manyF :: forall a. (String -> F a) -> Int -> String -> Maybe ErrorMsg -> Optlicative (List a)
+manyF read len name msg = Optlicative \ state -> case find ddash name state of
+  Just i ->
+    let
+      {removed, rest} = removeAtForWhile i len (not <<< startsDash) state
+    in
+      case runExcept (traverse read removed.unparsed) of
+        Right vs -> {state: rest, val: pure vs}
+        Left errs -> {state: rest, val: invalid (multipleErrorsToOptErrors errs)}
   _ -> ex name mempty MissingOpt msg state
 
 -- | A convenience function for nicely printing error messages.
@@ -166,42 +179,18 @@ logErrors = error <<< renderErrors
 
 -- | A `Preferences` that errors on unrecognized options, has no usage text,
 -- | and uses an always-failing parser for global options.
-defaultPreferences :: forall a. Preferences a
+defaultPreferences :: Preferences Void
 defaultPreferences =
   { errorOnUnrecognizedOpts: true
   , usage: Nothing
-  , globalOpts: throw (Custom "You should change this.")
+  , globalOpts: throw (Custom "Error: defaultPreferences used.")
   }
 
 -- | Use this to run an `Optlicative`. 
-parse
+optlicate
   :: forall optrow a e
    . Commando optrow a
   => Record optrow
   -> Preferences a
   -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
-parse rec prefs = do
-  args <- Array.drop 2 <$> argv
-  let
-    argslist = List.fromFoldable args
-    {cmds, opts} = partitionArgsList argslist
-    -- Commands
-    cmdores = commando rec cmds
-    cmd = List.last cmds
-    -- Opts
-    o = maybe prefs.globalOpts _.opt cmdores
-    {state, val} = unwrap o {unparsed: opts}
-    unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null state.unparsed)
-    value = case prefs.usage, unrecCheck, isValid val of
-      Just msg, true, true ->
-        unrecognizedOpts state <*>
-        throwSingleError (Custom msg)
-      Just msg, true, _ ->
-        unrecognizedOpts state <*>
-        throwSingleError (Custom msg) <*>
-        val
-      Just msg, false, false -> throwSingleError (Custom msg) <*> val
-      Just _, false, _ -> val
-      _, true, _ -> unrecognizedOpts state <*> val
-      _, _, _ -> val
-  pure {cmd, value}
+optlicate rec prefs = parse rec prefs <$> argv 

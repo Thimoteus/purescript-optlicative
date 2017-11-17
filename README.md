@@ -95,25 +95,33 @@ Note that none of these three combinators will fail.
 ### Custom data-types
 
 If we have a way of reading values from a `String` (specifically a function `f` of
-type `Foreign -> F a`) then we can use `optF f` to read such a value. Any errors
+type `String -> F a`) then we can use `optF f` to read such a value. Any errors
 in the `F` monad get turned into `OptErrors` in the `Optlicative` functor.
 
 Example:
 
 ```purescript
-readTuple :: Foreign -> F (Tuple Int Int)
+readTupleString :: String -> F (Tuple Int Int)
 
 optTuple :: Optlicative (Tuple Int Int)
-optTuple = optF readTuple "point" (Just "Points must be in the form '(x,y)'")
+optTuple = optF readTupleString "point" (Just "Points must be in the form '(x,y)'")
 ```
 
-Then the option `--point (3,5)` will **not** error if and only if
-`readTuple (toForeign "(3,5)")` does not error.
+Then the option `--point (3,5)` won't error if and only if
+`readTupleString "(3,5)"` does not error.
+
+### Options that accept multiple arguments
+
+Again, assuming we have a function `read :: String -> F a` for some type `a`,
+we can use `manyF read :: Int -> String -> Maybe ErrorMsg -> Optlicative (List a)`.
+
+In this case, `Int` represents the number of arguments expected (none of which
+may start with a hyphen character).
 
 ### Running the parser
 
 ```purescript
-parse :: Constraints => Record optrow -> Preferences a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
+optlicate :: Constraints => Record optrow -> Preferences a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
 ```
 
 `Preferences` is a record:
@@ -125,7 +133,7 @@ parse :: Constraints => Record optrow -> Preferences a -> Eff (process :: PROCES
 }
 ```
 
-A `defaultPreferences` is available.
+A `defaultPreferences :: Preferences Void` is available.
 
 The `errorOnUnrecognizedOpts` field indicates whether an error should be generated
 if a user passes in an option that isn't recognized by the parser.
@@ -142,11 +150,11 @@ to the value of type `a`.
 
 ## Dealing with Commands
 
-Let's take a closer look at the "Constraints" part of the `parse` type signature.
+Let's take a closer look at the "Constraints" part of the `optlicate` type signature.
 The actual signature starts like this:
 
 ```purescript
-parse :: forall optrow a e. Commando optrow => Record optrow -> Preferences a -> ...
+optlicate :: forall optrow a e. Commando optrow => Record optrow -> Preferences a -> ...
 ```
 
 The important part is the `Commando` typeclass constraint. It applies only to
@@ -174,7 +182,7 @@ run it against the `--help` flag.
 Any command, if it exists, will be placed into the `cmd` field of the result --
 if the program is used like `p command more`, then `cmd = Just "more"`.
 
-Let's look at the first argument to `parse`. In our example case, we'd need a
+Let's look at the first argument to `optlicate`. In our example case, we'd need a
 value of type `Record MyConfig`. If we can construct a value for just one field,
 we can construct them all. And those values are built using `Opt`, as suggested
 by the definition of `MyConfig`:
@@ -205,7 +213,7 @@ See the `test/` folder.
 
 ## Unsupported/future features
 
-* options with more than one argument (workaround: separate multiple arguments by a space, wrap the group in a pair of double quotes)
+* "Unsupported command" errors: when a command is given but does not match anything
 * passthrough options (as in `program --program-opt -- --passthrough-opt`)
 * other things I haven't thought of
 
@@ -223,6 +231,9 @@ See the `test/` folder.
 ```
   "optlicative": {
     "dependencies": [
+      "record",
+      "typelevel-prelude",
+      "symbols",
       "validation",
       "node-process",
       "eff",

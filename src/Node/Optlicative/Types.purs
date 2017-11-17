@@ -2,10 +2,13 @@ module Node.Optlicative.Types where
 
 import Prelude
 
-import Data.List (List)
+import Control.Alt (class Alt)
+import Control.Alternative (class Alternative)
+import Control.Plus (class Plus)
+import Data.List (List, singleton)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.Validation.Semigroup (V)
+import Data.Validation.Semigroup (V, isValid, invalid)
 
 newtype Optlicative a = Optlicative (OptState -> Result a)
 
@@ -25,6 +28,19 @@ instance applyOptlicative :: Apply Optlicative where
 
 instance applicativeOptlicative :: Applicative Optlicative where
   pure a = Optlicative \ state -> {state, val: pure a}
+
+instance altOptlicative :: Alt Optlicative where
+  alt (Optlicative x) (Optlicative y) = Optlicative \ s ->
+    let
+      {val} = x s
+    in
+      if isValid val then x s else y s
+
+instance plusOptlicative :: Plus Optlicative where
+  empty = Optlicative \ state ->
+    {state, val: invalid (singleton (Custom "Error: empty called"))}
+
+instance alternativeOptlicative :: Alternative Optlicative
 
 data OptError
   = TypeError ErrorMsg

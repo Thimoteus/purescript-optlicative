@@ -2,15 +2,18 @@ module Node.Optlicative.Internal where
 
 import Prelude
 
+import Data.Array as Array
 import Data.Foldable (or)
 import Data.Foreign (MultipleErrors, renderForeignError)
 import Data.List (List(Nil), (:))
 import Data.List as List
 import Data.List.Types (toList)
 import Data.Maybe (Maybe(..), maybe)
+import Data.Newtype (unwrap)
 import Data.String as String
-import Data.Validation.Semigroup (invalid)
-import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value)
+import Data.Validation.Semigroup (invalid, isValid)
+import Node.Commando (class Commando, commando)
+import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value, Preferences)
 
 throwSingleError :: forall a. OptError -> Value a
 throwSingleError = invalid <<< List.singleton
@@ -28,14 +31,59 @@ findAllIndices f xs = List.reverse zs where
   go acc _ Nil = acc
 
 removeAtFor :: Int -> Int -> OptState -> {removed :: OptState, rest :: OptState}
-removeAtFor beg end state@{unparsed} =
+removeAtFor beg end = removeAtForWhile beg end (const true)
+
+removeAtForWhile
+  :: Int
+  -> Int
+  -> (String -> Boolean)
+  -> OptState
+  -> {removed :: OptState, rest :: OptState}
+removeAtForWhile beg end f state@{unparsed} =
   let
-    end' = beg + end + 1
-    beg' = beg + 1
-    removed = state {unparsed = List.slice beg' end' unparsed}
-    rest = state {unparsed = List.take beg unparsed <> List.drop end' unparsed}
+    splice = spliceWhile f beg (end + 1) unparsed
   in
-    {removed, rest}
+    {removed: {unparsed: splice.focus}, rest: {unparsed: splice.pre <> splice.post}}
+
+spliceWhile
+  :: forall a
+   . (a -> Boolean)
+  -> Int -> Int
+  -> List a
+  -> {pre :: List a, focus :: List a, post :: List a}
+spliceWhile f beg end lst =
+  let
+    a = takeDropWhile (const true) beg lst
+    b = takeDropWhile' f end a.dropped
+  in
+    { pre: a.taken
+    , focus: b.taken
+    , post: b.dropped
+    }
+
+takeDropWhile :: forall a. (a -> Boolean) -> Int -> List a -> {taken :: List a, dropped :: List a}
+takeDropWhile = takeDrop Nil where
+  takeDrop acc f n lst = case n, lst of
+    0, _ -> {taken: List.reverse acc, dropped: lst}
+    _, Nil -> {taken: List.reverse acc, dropped: lst}
+    n, x : xs ->
+      if f x
+        then takeDrop (x : acc) f (n - 1) xs
+        else {taken: List.reverse acc, dropped: lst}
+
+-- Ignores first element
+takeDropWhile' :: forall a. (a -> Boolean) -> Int -> List a -> {taken :: List a, dropped :: List a}
+takeDropWhile' _ _ Nil = {taken: Nil, dropped: Nil}
+takeDropWhile' f n (_ : xs) = takeDropWhile'' f n xs
+  where
+  takeDropWhile'' = takeDrop Nil where
+    takeDrop acc f n lst = case n, lst of
+      0, _ -> {taken: List.reverse acc, dropped: lst}
+      _, Nil -> {taken: List.reverse acc, dropped: lst}
+      n, x : xs ->
+        if f x
+          then takeDrop (x : acc) f (n - 1) xs
+          else {taken: List.reverse acc, dropped: lst}
 
 removeHyphen :: Char -> OptState -> OptState
 removeHyphen c state =
@@ -56,6 +104,12 @@ isHyphen s =
   String.take 1 s == "-" &&
   String.take 2 s /= "--" &&
   String.length s >= 2
+
+isDdash :: String -> Boolean
+isDdash s = String.take 2 s == "--" && String.length s >= 3
+
+startsDash :: String -> Boolean
+startsDash s = String.take 1 s == "-"
 
 hyphens :: List String -> List String
 hyphens = List.filter isHyphen
@@ -101,7 +155,6 @@ multipleErrorsToOptErrors errs =
 unrecognizedOpts :: forall a. OptState -> Value a
 unrecognizedOpts state = invalid $ map UnrecognizedOpt $ unrecognize Nil state.unparsed
   where
-  isDdash s = String.take 2 s == "--" && String.length s >= 3
   unrecognize acc lst
     | (s : ss) <- lst
     , isDdash s = unrecognize (s : acc) ss
@@ -113,7 +166,39 @@ partitionArgsList argslist =
   let
     isCmd x = String.take 1 x /= "-"
     {init, rest} = List.span isCmd argslist
-    cmds = init
-    opts = rest
   in
-    {cmds, opts}
+    {cmds: init, opts: rest}
+
+parse
+  :: forall optrow a
+   . Commando optrow a
+  => Record optrow
+  -> Preferences a
+  -> Array String
+  -> {cmd :: Maybe String, value :: Value a}
+parse rec prefs argv =
+  let
+    args = Array.drop 2 argv
+    argslist = List.fromFoldable args
+    {cmds, opts} = partitionArgsList argslist
+    -- Commands
+    cmdores = commando rec cmds
+    cmd = _.cmd <$> cmdores
+    -- Opts
+    o = maybe prefs.globalOpts _.opt cmdores
+    {state, val} = unwrap o {unparsed: opts}
+    unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null state.unparsed)
+    value = case prefs.usage, unrecCheck, isValid val of
+      Just msg, true, true ->
+        unrecognizedOpts state <*>
+        throwSingleError (Custom msg)
+      Just msg, true, _ ->
+        unrecognizedOpts state <*>
+        throwSingleError (Custom msg) <*>
+        val
+      Just msg, false, false -> throwSingleError (Custom msg) <*> val
+      Just _, false, _ -> val
+      _, true, _ -> unrecognizedOpts state <*> val
+      _, _, _ -> val
+  in
+    {cmd, value}

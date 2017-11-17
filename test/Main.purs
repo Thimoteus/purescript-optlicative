@@ -8,7 +8,7 @@ import Data.List (length)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Validation.Semigroup (unV)
 import Node.Commando (Opt(Opt))
-import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, parse, string)
+import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, optlicate, string)
 import Node.Process (PROCESS)
 import Test.Types (Config(..), ConfigRec, showConfig)
 
@@ -32,18 +32,22 @@ optTwo = (\ color help -> ConfigTwo {color, help})
 globalConfig :: Optlicative Config
 globalConfig = (\ help version -> GlobalConfig {help, version})
   <$> flag "help" (Just 'h')
-  <*> flag "version" (Just 'v')  
+  <*> flag "version" (Just 'v')
 
 myPrefs :: Preferences Config
 myPrefs = defaultPreferences {globalOpts = globalConfig}
 
 -- | Try running the following:
--- | 1. `pulp test -- one two --help`
--- | 2. `pulp test -- --version`
--- | 3. `pulp test -- one`
+-- | 1. `pulp test -- one`
+-- | 2. `pulp test -- one --output`
+-- | 3. `pulp test -- one --output blah`
+-- | 4. `pulp test -- one two`
+-- | 5. `pulp test -- one two --help`
+-- | 5. `pulp test -- --version`
+-- | 6. `pulp test`
 main :: forall e. Eff (process :: PROCESS, console :: CONSOLE | e) Unit
 main = do
-  {cmd, value} <- parse configRec myPrefs
+  {cmd, value} <- optlicate configRec myPrefs
   maybe
     (log "No path parsed")
     (\ x -> log "Path parsed" *> log x)
