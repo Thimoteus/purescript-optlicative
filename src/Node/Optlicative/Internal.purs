@@ -88,22 +88,27 @@ takeDropWhile' f n (_ : xs) = takeDropWhile'' f n xs
 removeHyphen :: Char -> OptState -> OptState
 removeHyphen c state =
   let
-    f lst =
-      lst <#> \ str ->
-        if isHyphen str
-          then String.replace
-            (String.Pattern (String.singleton c))
-            (String.Replacement "")
-            str
-          else str
+    f str
+      | isMultiHyphen str = String.replace
+        (String.Pattern (String.singleton c))
+        (String.Replacement "")
+        str
+      | str == "-" <> String.singleton c = ""
+      | otherwise = str
   in
-    state {unparsed = f state.unparsed}
+    state {unparsed = List.filter (_ /= "") (f <$> state.unparsed)}
 
-isHyphen :: String -> Boolean
-isHyphen s =
+isMultiHyphen :: String -> Boolean
+isMultiHyphen s =
   String.take 1 s == "-" &&
   String.take 2 s /= "--" &&
-  String.length s >= 2
+  String.length s >= 3
+
+isSingleHyphen :: String -> Boolean
+isSingleHyphen s =
+  String.take 1 s == "-" &&
+  String.take 2 s /= "--" &&
+  String.length s == 2
 
 isDdash :: String -> Boolean
 isDdash s = String.take 2 s == "--" && String.length s >= 3
@@ -112,7 +117,7 @@ startsDash :: String -> Boolean
 startsDash s = String.take 1 s == "-"
 
 hyphens :: List String -> List String
-hyphens = List.filter isHyphen
+hyphens = List.filter (isMultiHyphen || isSingleHyphen)
 
 hasHyphen :: Char -> OptState -> Boolean
 hasHyphen c state = or $
