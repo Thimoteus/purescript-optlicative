@@ -215,6 +215,7 @@ See the `test/` folder.
 
 * "Unsupported command" errors: when a command is given but does not match anything
 * passthrough options (as in `program --program-opt -- --passthrough-opt`)
+* use of single characters for options instead of just flags
 * other things I haven't thought of
 
 ## Installation
@@ -238,11 +239,10 @@ See the `test/` folder.
       "node-process",
       "eff",
       "console",
-      "eff",
       "prelude"
     ],
     "repo": "https://github.com/thimoteus/purescript-optlicative.git",
-    "version": "v0.3.0"
+    "version": "v0.4.1"
   }
 ```
 
