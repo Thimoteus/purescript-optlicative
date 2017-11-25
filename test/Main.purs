@@ -30,9 +30,10 @@ optTwo = (\ color help -> ConfigTwo {color, help})
   <*> flag "help" (Just 'h')
 
 globalConfig :: Optlicative Config
-globalConfig = (\ help version -> GlobalConfig {help, version})
+globalConfig = (\ help version say -> GlobalConfig {help, version, say})
   <$> flag "help" (Just 'h')
   <*> flag "version" (Just 'v')
+  <*> string "say" Nothing
 
 myPrefs :: Preferences Config
 myPrefs = defaultPreferences {globalOpts = globalConfig}
@@ -44,7 +45,8 @@ myPrefs = defaultPreferences {globalOpts = globalConfig}
 -- | 4. `pulp test -- one two`
 -- | 5. `pulp test -- one two --help`
 -- | 5. `pulp test -- --version`
--- | 6. `pulp test`
+-- | 6. `pulp test -- --version --say doh`
+-- | 7. `pulp test`
 main :: forall e. Eff (process :: PROCESS, console :: CONSOLE | e) Unit
 main = do
   {cmd, value} <- optlicate configRec myPrefs

@@ -54,7 +54,7 @@ spliceWhile
 spliceWhile f beg end lst =
   let
     a = takeDropWhile (const true) beg lst
-    b = takeDropWhile' f end a.dropped
+    b = takeDropWhile' f (end - 1) a.dropped
   in
     { pre: a.taken
     , focus: b.taken
@@ -66,7 +66,7 @@ takeDropWhile = takeDrop Nil where
   takeDrop acc f n lst = case n, lst of
     0, _ -> {taken: List.reverse acc, dropped: lst}
     _, Nil -> {taken: List.reverse acc, dropped: lst}
-    n, x : xs ->
+    _, x : xs ->
       if f x
         then takeDrop (x : acc) f (n - 1) xs
         else {taken: List.reverse acc, dropped: lst}
@@ -76,14 +76,16 @@ takeDropWhile' :: forall a. (a -> Boolean) -> Int -> List a -> {taken :: List a,
 takeDropWhile' _ _ Nil = {taken: Nil, dropped: Nil}
 takeDropWhile' f n (_ : xs) = takeDropWhile'' f n xs
   where
-  takeDropWhile'' = takeDrop Nil where
-    takeDrop acc f n lst = case n, lst of
-      0, _ -> {taken: List.reverse acc, dropped: lst}
-      _, Nil -> {taken: List.reverse acc, dropped: lst}
-      n, x : xs ->
-        if f x
-          then takeDrop (x : acc) f (n - 1) xs
-          else {taken: List.reverse acc, dropped: lst}
+  takeDropWhile'' = takeDrop Nil
+
+takeDrop :: forall a. List a -> (a -> Boolean) -> Int -> List a -> {taken :: List a, dropped :: List a}
+takeDrop acc f n lst = case n, lst of
+  0, _ -> {taken: List.reverse acc, dropped: lst}
+  _, Nil -> {taken: List.reverse acc, dropped: lst}
+  _, x : xs ->
+    if f x
+      then takeDrop (x : acc) f (n - 1) xs
+      else {taken: List.reverse acc, dropped: lst}
 
 removeHyphen :: Char -> OptState -> OptState
 removeHyphen c state =

@@ -15,10 +15,11 @@ data Config
   | ConfigTwo ConfigTwo
 
 showConfig :: Config -> String
-showConfig (GlobalConfig {help, version}) =
+showConfig (GlobalConfig {help, version, say}) =
   "Global config parsed: \n" <>
   "help: " <> show help <> ", " <>
-  "version: " <> show version
+  "version: " <> show version <> ", " <>
+  "say: " <> say
 showConfig (ConfigOne {output, help}) =
   "ConfigOne parsed: \n" <>
   "output: " <> output <> ", " <>
@@ -31,6 +32,7 @@ showConfig (ConfigTwo {color, help}) =
 type GlobalConfig =
   { help :: Boolean
   , version :: Boolean
+  , say :: String
   }
 
 type ConfigOne =
