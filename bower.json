@@ -1,0 +1,34 @@
+{
+  "name": "purescript-optlicative",
+  "homepage": "https://github.com/Thimoteus/purescript-optlicative",
+  "authors": [
+    "thimoteus <thimoteus@teknik.io>"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Thimoteus/purescript-optlicative.git"
+  },
+  "description": "Applicative-style CLI argument/option parsing for node",
+  "main": "",
+  "keywords": [
+    "purescript",
+    "applicative",
+    "option",
+    "parsing"
+  ],
+  "license": "MIT",
+  "ignore": [
+    "**/.*",
+    "node_modules",
+    "bower_components",
+    "test",
+    "tests"
+  ],
+  "dependencies": {
+    "purescript-validation": "^3.2.0",
+    "purescript-record": "^0.2.6",
+    "purescript-typelevel-prelude": "^2.6.0",
+    "purescript-symbols": "^3.0.0",
+    "purescript-node-process": "^5.0.0"
+  }
+}
