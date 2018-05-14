@@ -4,7 +4,6 @@ import Prelude
 
 import Data.Array as Array
 import Data.Foldable (or)
-import Data.Foreign (MultipleErrors, renderForeignError)
 import Data.List (List(Nil), (:))
 import Data.List as List
 import Data.List.Types (toList)
@@ -12,6 +11,7 @@ import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
 import Data.Validation.Semigroup (invalid, isValid)
+import Foreign (MultipleErrors, renderForeignError)
 import Node.Commando (class Commando, commando)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value, Preferences)
 
@@ -129,7 +129,7 @@ hyphen = append "-" <<< String.singleton
 charList :: String -> List Char
 charList = charList' Nil where
   charList' acc str = case String.uncons str of
-    Just {head, tail} -> charList' (head : acc) tail  
+    Just {head, tail} -> charList' (head : acc) tail
     _ -> acc
 
 defaultError :: (ErrorMsg -> OptError) -> String -> String -> OptError

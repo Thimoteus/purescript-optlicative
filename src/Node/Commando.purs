@@ -9,10 +9,10 @@ import Prelude
 
 import Data.List (List(Nil), (:))
 import Data.Maybe (Maybe(..))
-import Data.Record (delete, get)
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Node.Optlicative.Types (Optlicative)
-import Type.Row (class RowLacks, class RowToList, Cons, Nil, RLProxy(..), kind RowList)
+import Record (delete, get)
+import Type.Row (class Lacks, class RowToList, class Cons, Cons, Nil, RLProxy(..), kind RowList)
 
 class RLCommando
   (rl :: RowList)
@@ -29,8 +29,8 @@ instance ihRlHelp ::
   ( IsSymbol k -- key in row of IH case
   , RLCommando tail rowtail a -- IH
   , RLCommando list' row' a -- also IH, for 2nd arg which is a row
-  , RowCons k (Opt a row') rowtail row -- row = rowtail U Opt
-  , RowLacks k rowtail
+  , Cons k (Opt a row') rowtail row -- row = rowtail U Opt
+  , Lacks k rowtail
   , RowToList rowtail tail -- rowtail <-> tail
   , RowToList row (Cons k (Opt a row') tail) -- row <-> list
   , RowToList row' list' -- row' <-> list'
@@ -38,7 +38,7 @@ instance ihRlHelp ::
 
     rlCommando _ rec args@(cmd : Nil) =
       let
-        sproxy = SProxy :: SProxy k  
+        sproxy = SProxy :: SProxy k
         opt = getopt (get sproxy rec)
         rectail = (delete sproxy rec) :: Record rowtail
       in

@@ -19,17 +19,16 @@ module Node.Optlicative
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE, error)
+import Effect (Effect)
+import Effect.Console (error)
 import Control.Monad.Except (runExcept)
 import Data.Array (intercalate)
 import Data.Either (Either(..))
-import Data.Foreign (F, Foreign, toForeign)
+import Foreign (F, Foreign, toForeign)
 import Data.Int (fromNumber)
 import Data.List (List)
 import Data.List as List
 import Data.Maybe (Maybe(..))
-import Data.Monoid (class Monoid, mempty)
 import Data.Traversable (traverse)
 import Data.Validation.Semigroup (invalid, isValid)
 import Global (isNaN, readFloat)
@@ -38,7 +37,7 @@ import Node.Commando (class Commando, commando, Opt(..), endOpt) as Exports
 import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, parse, removeAtFor, removeAtForWhile, removeHyphen, startsDash)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), Optlicative(..), Preferences, Value, renderOptError)
 import Node.Optlicative.Types (OptError(..), ErrorMsg, Optlicative(..), Value, Preferences) as Exports
-import Node.Process (PROCESS, argv)
+import Node.Process (argv)
 
 -- | A combinator that always fails.
 throw :: forall a. OptError -> Optlicative a
@@ -174,7 +173,7 @@ manyF read len name msg = Optlicative \ state -> case find ddash name state of
 renderErrors :: List OptError -> String
 renderErrors = intercalate "\n" <<< map renderOptError
 
-logErrors :: forall e. List OptError -> Eff (console :: CONSOLE | e) Unit
+logErrors :: List OptError -> Effect Unit
 logErrors = error <<< renderErrors
 
 -- | A `Preferences` that errors on unrecognized options, has no usage text,
@@ -186,11 +185,11 @@ defaultPreferences =
   , globalOpts: throw (Custom "Error: defaultPreferences used.")
   }
 
--- | Use this to run an `Optlicative`. 
+-- | Use this to run an `Optlicative`.
 optlicate
-  :: forall optrow a e
+  :: forall optrow a
    . Commando optrow a
   => Record optrow
   -> Preferences a
-  -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
-optlicate rec prefs = parse rec prefs <$> argv 
+  -> Effect {cmd :: Maybe String, value :: Value a}
+optlicate rec prefs = parse rec prefs <$> argv
