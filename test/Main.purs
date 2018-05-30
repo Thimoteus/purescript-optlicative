@@ -2,14 +2,13 @@ module Test.Main where
 
 import Prelude
 
-import Control.Monad.Eff (Eff)
-import Control.Monad.Eff.Console (CONSOLE, log)
+import Effect (Effect)
+import Effect.Console (log)
 import Data.List (length)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Validation.Semigroup (unV)
 import Node.Commando (Opt(Opt))
 import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, optlicate, string)
-import Node.Process (PROCESS)
 import Test.Types (Config(..), ConfigRec, showConfig)
 
 configRec :: Record ConfigRec
@@ -47,7 +46,7 @@ myPrefs = defaultPreferences {globalOpts = globalConfig}
 -- | 5. `pulp test -- --version`
 -- | 6. `pulp test -- --version --say doh`
 -- | 7. `pulp test`
-main :: forall e. Eff (process :: PROCESS, console :: CONSOLE | e) Unit
+main :: Effect Unit
 main = do
   {cmd, value} <- optlicate configRec myPrefs
   maybe

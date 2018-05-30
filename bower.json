@@ -25,10 +25,11 @@
     "tests"
   ],
   "dependencies": {
-    "purescript-validation": "^3.2.0",
-    "purescript-record": "^0.2.6",
-    "purescript-typelevel-prelude": "^2.6.0",
-    "purescript-symbols": "^3.0.0",
-    "purescript-node-process": "^5.0.0"
+    "purescript-foreign": "^5.0.0",
+    "purescript-validation": "^4.0.0",
+    "purescript-record": "^1.0.0",
+    "purescript-typelevel-prelude": "^3.0.0",
+    "purescript-node-process": "^6.0.0",
+    "purescript-console": "^4.1.0"
   }
 }

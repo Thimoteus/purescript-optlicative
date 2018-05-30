@@ -4,14 +4,15 @@ import Prelude
 
 import Data.Array as Array
 import Data.Foldable (or)
-import Data.Foreign (MultipleErrors, renderForeignError)
 import Data.List (List(Nil), (:))
 import Data.List as List
 import Data.List.Types (toList)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Newtype (unwrap)
 import Data.String as String
+import Data.String.CodeUnits as CU
 import Data.Validation.Semigroup (invalid, isValid)
+import Foreign (MultipleErrors, renderForeignError)
 import Node.Commando (class Commando, commando)
 import Node.Optlicative.Types (ErrorMsg, OptError(..), OptState, Result, Value, Preferences)
 
@@ -83,10 +84,10 @@ removeHyphen c state =
   let
     f str
       | isMultiHyphen str = String.replace
-        (String.Pattern (String.singleton c))
+        (String.Pattern (CU.singleton c))
         (String.Replacement "")
         str
-      | str == "-" <> String.singleton c = ""
+      | str == "-" <> CU.singleton c = ""
       | otherwise = str
   in
     state {unparsed = List.filter (_ /= "") (f <$> state.unparsed)}
@@ -114,7 +115,7 @@ hyphens = List.filter (isMultiHyphen || isSingleHyphen)
 
 hasHyphen :: Char -> OptState -> Boolean
 hasHyphen c state = or $
-  String.contains (String.Pattern $ String.singleton c) <$>
+  String.contains (String.Pattern $ CU.singleton c) <$>
   hyphens state.unparsed
 
 find :: forall a. (a -> String) -> a -> OptState -> Maybe Int
@@ -124,12 +125,12 @@ ddash :: String -> String
 ddash = append "--"
 
 hyphen :: Char -> String
-hyphen = append "-" <<< String.singleton
+hyphen = append "-" <<< CU.singleton
 
 charList :: String -> List Char
 charList = charList' Nil where
-  charList' acc str = case String.uncons str of
-    Just {head, tail} -> charList' (head : acc) tail  
+  charList' acc str = case CU.uncons str of
+    Just {head, tail} -> charList' (head : acc) tail
     _ -> acc
 
 defaultError :: (ErrorMsg -> OptError) -> String -> String -> OptError
