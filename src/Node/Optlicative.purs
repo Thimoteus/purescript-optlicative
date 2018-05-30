@@ -19,18 +19,18 @@ module Node.Optlicative
 
 import Prelude
 
-import Effect (Effect)
-import Effect.Console (error)
 import Control.Monad.Except (runExcept)
 import Data.Array (intercalate)
 import Data.Either (Either(..))
-import Foreign (F, Foreign, toForeign)
 import Data.Int (fromNumber)
 import Data.List (List)
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
 import Data.Validation.Semigroup (invalid, isValid)
+import Effect (Effect)
+import Effect.Console (error)
+import Foreign (F, Foreign, unsafeToForeign)
 import Global (isNaN, readFloat)
 import Node.Commando (class Commando)
 import Node.Commando (class Commando, commando, Opt(..), endOpt) as Exports
@@ -137,7 +137,7 @@ optForeign name msg = Optlicative \ state -> case find ddash name state of
       {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
-        Just h -> {state: rest, val: pure (toForeign h)}
+        Just h -> {state: rest, val: pure (unsafeToForeign h)}
         _ -> ex name (show 1) MissingArg msg rest
   _ -> ex name mempty MissingOpt msg state
 

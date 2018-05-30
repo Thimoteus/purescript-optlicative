@@ -25,10 +25,11 @@
     "tests"
   ],
   "dependencies": {
-    "purescript-foreign": "#compiler/0.12",
-    "purescript-validation": "#compiler/0.12",
-    "purescript-record": "#compiler/0.12",
-    "purescript-typelevel-prelude": "#compiler/0.12",
-    "purescript-node-process": "#compiler/0.12"
+    "purescript-foreign": "^5.0.0",
+    "purescript-validation": "^4.0.0",
+    "purescript-record": "^1.0.0",
+    "purescript-typelevel-prelude": "^3.0.0",
+    "purescript-node-process": "^6.0.0",
+    "purescript-console": "^4.1.0"
   }
 }

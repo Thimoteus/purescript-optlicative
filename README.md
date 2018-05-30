@@ -121,7 +121,7 @@ may start with a hyphen character).
 ### Running the parser
 
 ```purescript
-optlicate :: Constraints => Record optrow -> Preferences a -> Eff (process :: PROCESS | e) {cmd :: Maybe String, value :: Value a}
+optlicate :: Constraints => Record optrow -> Preferences a -> Effect {cmd :: Maybe String, value :: Value a}
 ```
 
 `Preferences` is a record:
@@ -223,29 +223,9 @@ See the `test/` folder.
 * Using bower:
 
 ```
-> bower install https://github.com/Thimoteus/purescript-optlicative.git
+> bower install purescript-optlicative
 ```
 
-* Using psc-package:
+* Or,
 
-1. Add it to a custom package set, for example:
-```
-  "optlicative": {
-    "dependencies": [
-      "record",
-      "typelevel-prelude",
-      "symbols",
-      "validation",
-      "node-process",
-      "eff",
-      "console",
-      "prelude"
-    ],
-    "repo": "https://github.com/thimoteus/purescript-optlicative.git",
-    "version": "v0.4.1"
-  }
-```
-
-Alternatively: use https://github.com/thimoteus/package-sets.git
-
-2. `> psc-package install optlicative`
+Add it to a package set!
