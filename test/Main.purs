@@ -44,7 +44,7 @@ myPrefs = defaultPreferences {globalOpts = globalConfig}
 -- | 3. `pulp test -- one --output blah`
 -- | 4. `pulp test -- one two`
 -- | 5. `pulp test -- one two --help`
--- | 6. `pulp test -- one --name "Parnell" --name "Stephanie"
+-- | 6. `pulp test -- one --name "John" --name "Bob" --name "Billy"
 -- | 7. `pulp test -- --version`
 -- | 8. `pulp test -- --version --say doh`
 -- | 9. `pulp test`

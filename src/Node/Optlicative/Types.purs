@@ -19,25 +19,30 @@ derive instance newtypeOptlicative :: Newtype (Optlicative a) _
 derive instance functorOptlicative :: Functor Optlicative
 
 instance monadRecOptlicative :: MonadRec Optlicative where
-    tailRecM f z = Optlicative \optstate -> tailRec (f z) optstate 
-      where
-        tailRec p@(Optlicative o) optstate = loop (step (o optstate))
-          where
-            loop (Done r) = r
-            loop (Loop { state, val }) =
-              case toEither val of
-                Left e      -> { state, val: invalid e}
-                Right value -> 
-                  let
-                    (Optlicative a1) = f value
-                  in
-                    loop (step (a1 state))
+    tailRecM f z = Optlicative \optstate -> 
+      let
+        -- Get our initial, stepped parser
+        (Optlicative o) = f z
+        result          = o optstate
+      in 
+        loop (adapt result)
 
-            step :: forall a b. Result (Step a b) -> Step (Result a) (Result b)
-            step { state, val } = case toEither val of
-              Left e         -> Done { state, val: invalid e }
-              Right (Loop v) -> Loop { state, val: pure v }
-              Right (Done v) -> Done { state, val: pure v }
+      where
+        loop (Done r)              = r
+        loop (Loop { state, val }) =
+          case toEither val of
+            Left e      -> { state, val: invalid e}
+            Right value -> 
+              let
+                (Optlicative a1) = f value
+              in
+                loop (adapt (a1 state))
+
+        adapt :: forall a b. Result (Step a b) -> Step (Result a) (Result b)
+        adapt { state, val } = case toEither val of
+          Left e         -> Done { state, val: invalid e }
+          Right (Loop v) -> Loop { state, val: pure v }
+          Right (Done v) -> Done { state, val: pure v }
 
 instance bindOptlicative :: Bind Optlicative where
   bind (Optlicative f) g = Optlicative \s -> 
