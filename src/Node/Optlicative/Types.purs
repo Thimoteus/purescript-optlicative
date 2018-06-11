@@ -12,7 +12,7 @@ import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
 import Data.Validation.Semigroup (V, invalid, isValid, toEither)
 
-newtype Optlicative a = Optlicative (OptState -> { state :: OptState, val :: V (List OptError) a })
+newtype Optlicative a = Optlicative (OptState -> Result a)
 
 derive instance newtypeOptlicative :: Newtype (Optlicative a) _
 
