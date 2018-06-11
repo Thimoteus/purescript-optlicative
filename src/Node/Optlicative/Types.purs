@@ -2,19 +2,61 @@ module Node.Optlicative.Types where
 
 import Prelude
 
+import Control.Monad.Rec.Class (class MonadRec, Step(..))
 import Control.Alt (class Alt)
 import Control.Alternative (class Alternative)
 import Control.Plus (class Plus)
+import Data.Either (Either(..))
 import Data.List (List, singleton)
 import Data.Maybe (Maybe)
 import Data.Newtype (class Newtype)
-import Data.Validation.Semigroup (V, isValid, invalid)
+import Data.Validation.Semigroup (V, invalid, isValid, toEither)
 
 newtype Optlicative a = Optlicative (OptState -> Result a)
 
 derive instance newtypeOptlicative :: Newtype (Optlicative a) _
 
 derive instance functorOptlicative :: Functor Optlicative
+
+instance monadRecOptlicative :: MonadRec Optlicative where
+    tailRecM f z = Optlicative \optstate -> 
+      let
+        -- Get our initial, stepped parser
+        (Optlicative o) = f z
+        result          = o optstate
+      in 
+        loop (adapt result)
+
+      where
+        loop (Done r)              = r
+        loop (Loop { state, val }) =
+          case toEither val of
+            Left e      -> { state, val: invalid e}
+            Right value -> 
+              let
+                (Optlicative a1) = f value
+              in
+                loop (adapt (a1 state))
+
+        adapt :: forall a b. Result (Step a b) -> Step (Result a) (Result b)
+        adapt { state, val } = case toEither val of
+          Left e         -> Done { state, val: invalid e }
+          Right (Loop v) -> Loop { state, val: pure v }
+          Right (Done v) -> Done { state, val: pure v }
+
+instance bindOptlicative :: Bind Optlicative where
+  bind (Optlicative f) g = Optlicative \s -> 
+    let
+      { state, val } = f s
+    in case toEither val of
+         Left e  -> { state, val: invalid e}
+         Right v -> 
+           let
+             (Optlicative b) = g v
+           in
+             b state
+
+instance monadOptlicative :: Monad Optlicative
 
 instance applyOptlicative :: Apply Optlicative where
   apply (Optlicative f) (Optlicative a) = Optlicative \ s ->
