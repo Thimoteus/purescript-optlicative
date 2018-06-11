@@ -118,6 +118,8 @@ optional (Optlicative o) = Optlicative \ s ->
   let {state, val} = o s
   in  {state, val: if isValid val then Just <$> val else pure Nothing}
 
+-- | Apply an `Optlicative` parser zero or more times, collecting the
+-- | results in a `List`.
 many :: forall a. Optlicative a -> Optlicative (List a)
 many parser = Optlicative \optstate -> go parser optstate Nil
   where
