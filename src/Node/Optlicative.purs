@@ -9,6 +9,7 @@ module Node.Optlicative
   , withDefaultM
   , optF
   , optForeign
+  , many
   , manyF
   , optlicate
   , defaultPreferences
@@ -23,11 +24,11 @@ import Control.Monad.Except (runExcept)
 import Data.Array (intercalate)
 import Data.Either (Either(..))
 import Data.Int (fromNumber)
-import Data.List (List)
+import Data.List (List(..), (:))
 import Data.List as List
 import Data.Maybe (Maybe(..))
 import Data.Traversable (traverse)
-import Data.Validation.Semigroup (invalid, isValid)
+import Data.Validation.Semigroup (invalid, isValid, toEither)
 import Effect (Effect)
 import Effect.Console (error)
 import Foreign (F, Foreign, unsafeToForeign)
@@ -116,6 +117,17 @@ optional :: forall a. Optlicative a -> Optlicative (Maybe a)
 optional (Optlicative o) = Optlicative \ s ->
   let {state, val} = o s
   in  {state, val: if isValid val then Just <$> val else pure Nothing}
+
+many :: forall a. Optlicative a -> Optlicative (List a)
+many parser = Optlicative \optstate -> go parser optstate Nil
+  where
+    go (Optlicative o) s acc =
+      let
+        { state, val } = o s
+      in 
+        case toEither val of
+           Left _  -> { state, val: pure (List.reverse acc) }
+           Right v -> go parser state (v:acc)
 
 -- | Instead of failing, turns an optlicative parser into one that always succeeds
 -- | but may do so with the given default argument if no such option is found.

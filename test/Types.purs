@@ -2,6 +2,7 @@ module Test.Types where
 
 import Prelude
 import Node.Commando (Opt)
+import Data.List (List, fold)
 
 type ConfigRec =
   ( one :: Opt Config
@@ -20,9 +21,10 @@ showConfig (GlobalConfig {help, version, say}) =
   "help: " <> show help <> ", " <>
   "version: " <> show version <> ", " <>
   "say: " <> say
-showConfig (ConfigOne {output, help}) =
+showConfig (ConfigOne {output, names, help}) =
   "ConfigOne parsed: \n" <>
   "output: " <> output <> ", " <>
+  "names: " <> fold names <> ", " <>
   "help: " <> show help
 showConfig (ConfigTwo {color, help}) =
   "ConfigTwo parsed: \n" <>
@@ -37,6 +39,7 @@ type GlobalConfig =
 
 type ConfigOne =
   { output :: String
+  , names :: List String
   , help :: Boolean
   }
 
