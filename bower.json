@@ -25,7 +25,6 @@
     "tests"
   ],
   "dependencies": {
-
     "purescript-foreign": "^5.0.0",
     "purescript-validation": "^4.0.0",
     "purescript-record": "^1.0.0",
