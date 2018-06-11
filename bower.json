@@ -31,6 +31,7 @@
     "purescript-record": "^1.0.0",
     "purescript-typelevel-prelude": "^3.0.0",
     "purescript-node-process": "^6.0.0",
-    "purescript-console": "^4.1.0"
+    "purescript-console": "^4.1.0",
+    "purescript-tailrec": "^4.0.0"
   }
 }
