@@ -8,7 +8,7 @@ import Data.List (length)
 import Data.Maybe (Maybe(..), maybe)
 import Data.Validation.Semigroup (unV)
 import Node.Commando (Opt(Opt))
-import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, optlicate, string)
+import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, optlicate, string, many)
 import Test.Types (Config(..), ConfigRec, showConfig)
 
 configRec :: Record ConfigRec
@@ -19,8 +19,9 @@ configRec =
   }
 
 optOne :: Optlicative Config
-optOne = (\ output help -> ConfigOne {output, help})
+optOne = (\ output names help -> ConfigOne {output, names, help})
   <$> string "output" Nothing
+  <*> many (string "name" Nothing)
   <*> flag "help" (Just 'h')
 
 optTwo :: Optlicative Config
@@ -44,8 +45,10 @@ myPrefs = defaultPreferences {globalOpts = globalConfig}
 -- | 4. `pulp test -- one two`
 -- | 5. `pulp test -- one two --help`
 -- | 5. `pulp test -- --version`
--- | 6. `pulp test -- --version --say doh`
--- | 7. `pulp test`
+-- | 6. `pulp test -- one --name "John" --name "Bob" --name "Billy"
+-- | 7. `pulp test -- --version`
+-- | 8. `pulp test -- --version --say doh`
+-- | 9. `pulp test`
 main :: Effect Unit
 main = do
   {cmd, value} <- optlicate configRec myPrefs
