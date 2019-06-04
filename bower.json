@@ -28,7 +28,6 @@
     "purescript-foreign": "^5.0.0",
     "purescript-validation": "^4.0.0",
     "purescript-record": "^2.0.0",
-    "purescript-typelevel-prelude": "^4.0.0",
     "purescript-node-process": "^7.0.0",
     "purescript-console": "^4.1.0"
   }
