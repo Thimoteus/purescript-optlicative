@@ -6,7 +6,7 @@ import Effect (Effect)
 import Effect.Console (log)
 import Data.List (length)
 import Data.Maybe (Maybe(..), maybe)
-import Data.Validation.Semigroup (unV)
+import Data.Validation.Semigroup (validation)
 import Node.Commando (Opt(Opt))
 import Node.Optlicative (Optlicative, Preferences, defaultPreferences, flag, logErrors, optlicate, string, many)
 import Test.Types (Config(..), ConfigRec, showConfig)
@@ -56,7 +56,7 @@ main = do
     (log "No path parsed")
     (\ x -> log "Path parsed" *> log x)
     cmd
-  unV
+  validation
     (\ x -> do
       log "Errors found: "
       log (show (length x) <> " errors")

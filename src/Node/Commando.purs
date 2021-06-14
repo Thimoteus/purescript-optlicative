@@ -11,18 +11,18 @@ import Data.List (List(Nil), (:))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Node.Optlicative.Types (Optlicative)
-import Record (delete, get)
 import Prim.Row as R
 import Prim.RowList as RL
-import Type.Data.RowList (RLProxy(..))
+import Record (delete, get)
+import Type.Proxy (Proxy(..))
 
 class RLCommando
-  (rl :: RL.RowList)
-  (row :: # Type)
+  (rl :: RL.RowList Type)
+  (row :: Row Type)
   (a :: Type)
   | rl -> row
   where
-    rlCommando :: RLProxy rl -> Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
+    rlCommando :: Proxy rl -> Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
 instance basisRlHelp :: RLCommando RL.Nil () a where
   rlCommando _ _ _ = Nothing
@@ -46,13 +46,13 @@ instance ihRlHelp ::
       in
         if cmd == reflectSymbol sproxy
           then Just {cmd, opt}
-          else rlCommando (RLProxy :: RLProxy tail) rectail args
+          else rlCommando (Proxy :: Proxy tail) rectail args
 
     rlCommando _ rec args@(x : xs) = -- haven't found final command yet
       let
         sproxy = SProxy :: SProxy k
-        rldeeper = RLProxy :: RLProxy list'
-        rlwider = RLProxy :: RLProxy tail
+        rldeeper = Proxy :: Proxy list'
+        rlwider = Proxy :: Proxy tail
         rec' = (getrow (get sproxy rec)) :: Record row'
         rectail = (delete sproxy rec) :: Record rowtail
       in
@@ -62,16 +62,16 @@ instance ihRlHelp ::
 
     rlCommando _ _ _ = Nothing -- ran out of command path elements
 
-class Commando (row :: # Type) a where
+class Commando (row :: Row Type) a where
   commando :: Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
 instance rowHelpInst ::
   ( RL.RowToList row list
   , RLCommando list row a
   ) => Commando row a where
-    commando rec xs = rlCommando (RLProxy :: RLProxy list) rec xs
+    commando rec xs = rlCommando (Proxy :: Proxy list) rec xs
 
-data Opt (a :: Type) (row :: # Type) = Opt (Optlicative a) (Record row)
+data Opt (a :: Type) (row :: Row Type) = Opt (Optlicative a) (Record row)
 
 endOpt :: forall a. Optlicative a -> Opt a ()
 endOpt o = Opt o {}

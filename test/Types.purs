@@ -12,7 +12,7 @@ type ConfigRec =
 
 data Config
   = GlobalConfig GlobalConfig
-  | ConfigOne ConfigOne  
+  | ConfigOne ConfigOne
   | ConfigTwo ConfigTwo
 
 showConfig :: Config -> String

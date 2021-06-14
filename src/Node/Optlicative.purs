@@ -21,18 +21,18 @@ module Node.Optlicative
 import Prelude
 
 import Control.Monad.Except (runExcept)
-import Data.Array (intercalate)
 import Data.Either (Either(..))
 import Data.Int (fromNumber)
 import Data.List (List(..), (:))
 import Data.List as List
 import Data.Maybe (Maybe(..))
+import Data.Number (isNaN)
+import Data.Number as Number
 import Data.Traversable (traverse)
 import Data.Validation.Semigroup (invalid, isValid, toEither)
 import Effect (Effect)
 import Effect.Console (error)
 import Foreign (F, Foreign, unsafeToForeign)
-import Global (isNaN, readFloat)
 import Node.Commando (class Commando)
 import Node.Commando (class Commando, commando, Opt(..), endOpt) as Exports
 import Node.Optlicative.Internal (ddash, ex, except, find, hasHyphen, multipleErrorsToOptErrors, parse, removeAtFor, removeAtForWhile, removeHyphen, startsDash)
@@ -53,7 +53,7 @@ flag :: String -> Maybe Char -> Optlicative Boolean
 flag name mc = Optlicative \ state -> case find ddash name state of
   Just i ->
     let
-      {removed, rest} = removeAtFor i 0 state
+      {rest} = removeAtFor i 0 state
     in
       {state: rest, val: pure true}
   _ -> case mc of
@@ -86,7 +86,7 @@ int name msg = Optlicative \ state -> case find ddash name state of
       {removed, rest} = removeAtForWhile i 1 (not <<< startsDash) state
     in
       case List.head removed.unparsed of
-        Just h -> case fromNumber (readFloat h) of
+        Just h -> case fromNumber =<< Number.fromString h of
           Just n -> {state: rest, val: pure n}
           _ -> ex name "int" TypeError msg rest
         _ -> ex name (show 1) MissingArg msg rest
@@ -102,9 +102,9 @@ float name msg = Optlicative \ state -> case find ddash name state of
     in
       case List.head removed.unparsed of
         Just h ->
-          if isNaN (readFloat h)
-            then ex name "float" TypeError msg rest
-            else {state: rest, val: pure (readFloat h)}
+          case Number.fromString h of
+            Just n | not isNaN n → {state: rest, val: pure n}
+            _ → ex name "float" TypeError msg rest
         _ -> ex name (show 1) MissingArg msg rest
   _ -> ex name mempty MissingOpt msg state
 
@@ -126,7 +126,7 @@ many parser = Optlicative \optstate -> go parser optstate Nil
     go (Optlicative o) s acc =
       let
         { state, val } = o s
-      in 
+      in
         case toEither val of
            Left _  -> { state, val: pure (List.reverse acc) }
            Right v -> go parser state (v:acc)
@@ -185,7 +185,7 @@ manyF read len name msg = Optlicative \ state -> case find ddash name state of
 
 -- | A convenience function for nicely printing error messages.
 renderErrors :: List OptError -> String
-renderErrors = intercalate "\n" <<< map renderOptError
+renderErrors = List.intercalate "\n" <<< map renderOptError
 
 logErrors :: List OptError -> Effect Unit
 logErrors = error <<< renderErrors
