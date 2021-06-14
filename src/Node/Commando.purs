@@ -7,37 +7,36 @@ module Node.Commando
 
 import Prelude
 
-import Prim.Row as Row
-import Prim.RowList as RowList
-
 import Data.List (List(Nil), (:))
 import Data.Maybe (Maybe(..))
 import Data.Symbol (class IsSymbol, SProxy(..), reflectSymbol)
 import Node.Optlicative.Types (Optlicative)
+import Prim.Row as R
+import Prim.RowList as RL
 import Record (delete, get)
 import Type.Proxy (Proxy(..))
 
 class RLCommando
-  (rl :: RowList.RowList Type)
+  (rl :: RL.RowList Type)
   (row :: Row Type)
   (a :: Type)
   | rl -> row
   where
     rlCommando :: Proxy rl -> Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
-instance basisRlHelp :: RLCommando RowList.Nil () a where
+instance basisRlHelp :: RLCommando RL.Nil () a where
   rlCommando _ _ _ = Nothing
 
 instance ihRlHelp ::
   ( IsSymbol k -- key in row of IH case
   , RLCommando tail rowtail a -- IH
   , RLCommando list' row' a -- also IH, for 2nd arg which is a row
-  , Row.Cons k (Opt a row') rowtail row -- row = rowtail U Opt
-  , Row.Lacks k rowtail
-  , RowList.RowToList rowtail tail -- rowtail <-> tail
-  , RowList.RowToList row (RowList.Cons k (Opt a row') tail) -- row <-> list
-  , RowList.RowToList row' list' -- row' <-> list'
-  ) => RLCommando (RowList.Cons k (Opt a row') tail) row a where
+  , R.Cons k (Opt a row') rowtail row -- row = rowtail U Opt
+  , R.Lacks k rowtail
+  , RL.RowToList rowtail tail -- rowtail <-> tail
+  , RL.RowToList row (RL.Cons k (Opt a row') tail) -- row <-> list
+  , RL.RowToList row' list' -- row' <-> list'
+  ) => RLCommando (RL.Cons k (Opt a row') tail) row a where
 
     rlCommando _ rec args@(cmd : Nil) =
       let
@@ -67,7 +66,7 @@ class Commando (row :: Row Type) a where
   commando :: Record row -> List String -> Maybe {cmd :: String, opt :: Optlicative a}
 
 instance rowHelpInst ::
-  ( RowList.RowToList row list
+  ( RL.RowToList row list
   , RLCommando list row a
   ) => Commando row a where
     commando rec xs = rlCommando (Proxy :: Proxy list) rec xs
