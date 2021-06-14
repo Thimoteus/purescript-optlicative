@@ -40,7 +40,7 @@ removeAtForWhile
   -> (String -> Boolean)
   -> OptState
   -> {removed :: OptState, rest :: OptState}
-removeAtForWhile beg end f state@{unparsed} =
+removeAtForWhile beg end f {unparsed} =
   let
     splice = spliceWhile f beg (end + 1) unparsed
   in
@@ -177,27 +177,26 @@ parse
   -> {cmd :: Maybe String, value :: Value a}
 parse rec prefs argv =
   let
-    args = Array.drop 2 argv
-    argslist = List.fromFoldable args
-    {cmds, opts} = partitionArgsList argslist
+    argslist = List.fromFoldable (Array.drop 2 argv)
+    args = partitionArgsList argslist
     -- Commands
-    cmdores = commando rec cmds
+    cmdores = commando rec args.cmds
     cmd = _.cmd <$> cmdores
     -- Opts
     o = maybe prefs.globalOpts _.opt cmdores
-    {state, val} = unwrap o {unparsed: opts}
-    unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null state.unparsed)
-    value = case prefs.usage, unrecCheck, isValid val of
+    st = unwrap o {unparsed: args.opts}
+    unrecCheck = prefs.errorOnUnrecognizedOpts && not (List.null st.state.unparsed)
+    value = case prefs.usage, unrecCheck, isValid st.val of
       Just msg, true, true ->
-        unrecognizedOpts state <*>
+        unrecognizedOpts st.state <*>
         throwSingleError (Custom msg)
       Just msg, true, _ ->
-        unrecognizedOpts state <*>
+        unrecognizedOpts st.state <*>
         throwSingleError (Custom msg) <*>
-        val
-      Just msg, false, false -> throwSingleError (Custom msg) <*> val
-      Just _, false, _ -> val
-      _, true, _ -> unrecognizedOpts state <*> val
-      _, _, _ -> val
+        st.val
+      Just msg, false, false -> throwSingleError (Custom msg) <*> st.val
+      Just _, false, _ -> st.val
+      _, true, _ -> unrecognizedOpts st.state <*> st.val
+      _, _, _ -> st.val
   in
     {cmd, value}
